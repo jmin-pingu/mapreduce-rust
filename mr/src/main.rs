@@ -27,6 +27,7 @@ impl Worker for HelloServer {
         format!("Bye, {name}!")
     }
 }
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let (client_transport, server_transport) = tarpc::transport::channel::unbounded();
@@ -57,3 +58,4 @@ async fn main() -> anyhow::Result<()> {
 // Modules
 pub mod ds;
 pub mod rpc;
+pub mod coordinator;
