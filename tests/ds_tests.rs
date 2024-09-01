@@ -1,6 +1,4 @@
-use mr;
-use mr::ds::State;
-use mr::worker::Intermediate;
+use mr::ds::Intermediate;
 
 #[test]
 fn test_intermediate() {

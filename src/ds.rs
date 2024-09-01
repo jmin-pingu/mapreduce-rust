@@ -1,6 +1,13 @@
-use std::time::{Instant, Duration};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    time::{Instant, Duration},
+    sync::{Arc, Mutex, MutexGuard},
+    collections::HashMap
+};
 
+/// A Task contains information about the tasks that a Worker will be assigned to 
+/// complete by the Coordinator
+// NOTE: we can also pair a path with a UUID so that tasks with the same path are distinguishable.
+// However, this is pointless as paths should be unique (assumption)
 #[derive(Debug)]
 pub struct Task { 
     path: String, 
@@ -9,8 +16,6 @@ pub struct Task {
     task_type: TaskType, 
 }
 
-/// A Task contains information about tasks that a Worker will be assigned to complete by the
-/// Coordinator
 impl Task {
     pub fn new(path: String, state: State, task_type: TaskType) -> Self { 
         Task {
@@ -96,14 +101,15 @@ pub struct TaskManager {
 }
  
 impl TaskManager {
-    /// Returns an empty task manager
+    /// new: 
+    ///
     pub fn new() -> Self {
         TaskManager{ 
             list: Arc::new(Mutex::new(Vec::new()))
         }
     }
 
-    /// Adds a task to the manager
+    /// add_task: Adds a task to the manager
     ///
     /// # Arguments
     ///
@@ -115,11 +121,10 @@ impl TaskManager {
     }
 
     /// Get the first available Idle task to give to a worker
-    ///
-    pub fn get_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<String> {
+    // NOTE: Think of a better name for this. 
+    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<String> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
-        // NOTE: Potential concern is that we are modifying a list as we are iterating over it.
         for timed_task in &mut (*taskman) {
             if timed_task.task.get_state() == State::Idle && (task_type == Some(timed_task.task.get_task_type()) || task_type == None){
                 timed_task.task.set_worker(id);
@@ -129,16 +134,29 @@ impl TaskManager {
         None
     }
 
-    pub fn check_task_type(&self) -> bool { true } 
+    /// update_state: Update the state of a task if it exists (return true)
+    pub fn update_state(&mut self, task: String, state: State) -> bool {
+        let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
+        let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
+        for timed_task in &mut (*taskman) {
+            if timed_task.task.get_path() == task {
+                timed_task.task.set_state(state);
+                return true
+            }         
+        }
+        false
+    }
 
-    /// Remove completed tasks 
+    // pub fn check_task_type(&self) -> bool { } 
+
+    /// clean: Remove completed tasks 
     pub fn clean(&mut self) {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         (*taskman).retain(|timed_task| timed_task.task.get_state() != State::Completed);
     }
 
-    /// Get the size of the list of tasks remaining 
+    /// get_size: Get the size of the list of tasks remaining 
     pub fn get_size(&self) -> usize {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
@@ -146,3 +164,24 @@ impl TaskManager {
     }
 }
 
+/// DESC
+pub struct Intermediate(HashMap<String, Vec<String>>);
+
+/// DESC
+impl Intermediate {
+    pub fn new() -> Self {
+        Intermediate(HashMap::new())
+    }
+
+    pub fn insert(&mut self, key: String, value: String) {
+        if let Some(values) = self.0.get_mut(&key) {
+            values.push(value);
+        } else {
+            self.0.insert(key, vec![value]);
+        }
+    }
+
+    pub fn get(&mut self, key: String) -> Option<&Vec<String>> {
+        self.0.get(&key) 
+    }
+}

@@ -2,24 +2,31 @@ use crate::ds::TaskType;
 
 #[tarpc::service]
 pub trait TaskService {
-    /// DEFINITION
+    /// get_task: an RPC to get a task of type TaskType from the Coordinator's TaskManager. Returns
+    /// the path of the Task and whether all tasks are completed
     ///
     /// # Arguments
     ///
-    /// * `var`
-    async fn get_task(id: i8, task_type: Option<TaskType>) -> Option<String>;
+    /// * `id`: the worker id
+    /// * `task_type`: the desired TaskType. If None, then gets either TaskType::Map or TaskType::Reduce, with a priority for TaskType::Map.
+    ///
+    async fn get_task(id: i8, task_type: Option<TaskType>) -> (Option<String>, bool);
 
-    /// DEFINITION
+    /// completed_task: a RPC which communicates whether a task is completed, where the task is
+    /// denoted by its path. The function returns a bool to indicate whether communication was
+    /// successful
     ///
     /// # Arguments
     ///
-    /// * `var`
+    /// * `task`: the path of the task that has been completed
+    ///
     async fn completed_task(task: String) -> bool;
 
-    /// An example RPC to test functionality of tarpc
+    /// echo: an example RPC which has the same functionality as the `echo` syscall to test tarpc
+    /// functionality
     ///
     /// # Arguments
     ///
-    /// * `input`: input that will be echoed back
+    /// * `input`: the string that will be echoed back
     async fn echo(input: String) -> String;
 }

@@ -5,7 +5,7 @@ use tarpc::{
     tokio_serde::formats::Json,
 };
 use futures::{future, prelude::*};
-use mr::ds::{TaskType, TaskManager};
+use mr::ds::{State, TaskType, TaskManager};
 use clap::Parser;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 
@@ -25,14 +25,18 @@ struct Flags {
 }
 
 impl mr::rpc::TaskService for Coordinator {
-    async fn get_task(mut self, _: context::Context, id: i8, task_type: Option<TaskType>) -> Option<String> {
-        // crate::ds::Task::new("TimedTask".to_string(), 1, crate::ds::State::Idle, crate::ds::TaskType::Map)
-        self.taskman.get_task(id, task_type)     
+    async fn get_task(mut self, _: context::Context, id: i8, task_type: Option<TaskType>) -> (Option<String>, bool) {
+        let task_todo = self.taskman.get_idle_task(id, task_type);
+        self.taskman.clean(); // Gets rid of completed tasks
+        if self.taskman.get_size() == 0 {
+            (task_todo, true) 
+        } else {
+            (task_todo, false)
+        }
     }
 
-    async fn completed_task(self, _: context::Context, task: String) -> bool { 
-        // Change self.task_manager
-        true 
+    async fn completed_task(mut self, _: context::Context, task: String) -> bool { 
+        self.taskman.update_state(task, State::Completed)
     }    
 
     async fn echo(self, _: context::Context, input: String) -> String {
