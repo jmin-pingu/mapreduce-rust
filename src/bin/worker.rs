@@ -1,5 +1,8 @@
 use mr::ds::{TaskType, Intermediate};
-use std::thread;
+use std::{
+    thread,
+    fs
+};
 use clap::Parser;
 use std::{
     net::SocketAddr,
@@ -13,7 +16,6 @@ use tarpc::{
     context, 
     tokio_serde::formats::Json
 };
-
 
 /// hash: Calculates the hash for a generic T that implements Hash
 fn hash<T: Hash>(t: &T) -> u64 {
@@ -61,8 +63,9 @@ pub async fn main() {
         send_echo(x)
     );
     println!("{:#?}", handle.join().unwrap());
-
 }
+
+// Define client-side RPC calls
 #[tokio::main]
 pub async fn send_echo(arg: String) -> Result<String, RpcError> {
     let flags = Flags::parse();
@@ -77,6 +80,35 @@ pub async fn send_echo(arg: String) -> Result<String, RpcError> {
     // args as defined, with the addition of a Context, which is always the first arg. The Context
     // specifies a deadline and trace information which can be helpful in debugging requests.
     client.echo(context::current(), arg).await
+}
+
+
+#[tokio::main]
+pub async fn send_get_task(id: i8, task_type: Option<TaskType>) -> Result<(Option<String>, bool), RpcError> {
+    let flags = Flags::parse();
+    let mut transport = tarpc::serde_transport::tcp::connect(flags.server_addr, Json::default);
+
+    transport.config_mut().max_frame_length(usize::MAX);
+    let client: TaskServiceClient = TaskServiceClient::new(client::Config::default(), transport.await.unwrap()).spawn();
+    client.get_task(context::current(), id, task_type).await
+}
+
+
+#[tokio::main]
+pub async fn send_completed_task(task: String) -> Result<bool, RpcError> {
+    let flags = Flags::parse();
+    let mut transport = tarpc::serde_transport::tcp::connect(flags.server_addr, Json::default);
+
+    transport.config_mut().max_frame_length(usize::MAX);
+    let client: TaskServiceClient = TaskServiceClient::new(client::Config::default(), transport.await.unwrap()).spawn();
+    client.completed_task(context::current(), task).await
+}
+
+/// read_file: 
+fn read_file(file_name: String) -> (String, String) {
+    let contents = fs::read_to_string(file_name.clone()).expect("Should have been able to read file");
+    (file_name, contents)
+
 }
 
 /// Description
