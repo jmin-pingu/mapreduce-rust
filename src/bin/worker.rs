@@ -1,7 +1,11 @@
-use mr::ds::{TaskType, Intermediate};
+use mr::ds::{TaskType, Intermediate, KeyValue};
+use serde_json;
 use std::{
     thread,
-    fs
+    fs,
+    io::prelude::*, 
+    path, 
+    io,
 };
 use clap::Parser;
 use std::{
@@ -29,7 +33,7 @@ fn hash<T: Hash>(t: &T) -> u64 {
 /// Arguments
 pub fn worker(
     id: i8, 
-    mapf: &dyn Fn(String, String) -> String, 
+    mapf: &dyn Fn(String, String) -> Vec<KeyValue>, 
     reducef: &dyn Fn(String, Vec<String>) -> String
 ) {
     // NOTE: RPC GetTask
@@ -43,8 +47,10 @@ pub fn worker(
     loop {
         println!("sleeping for 500 millis");
         thread::sleep(delay);
-        do_map(mapf);
-        do_reduce(reducef);
+        // do_map(mapf);
+        // do_reduce(reducef);
+        // NOTE: before reducing, need to make sure that the intermediate file contains all the
+        // information from the mapf
     }
     
 }
@@ -108,16 +114,86 @@ pub async fn send_completed_task(task: String) -> Result<bool, RpcError> {
 fn read_file(file_name: String) -> (String, String) {
     let contents = fs::read_to_string(file_name.clone()).expect("Should have been able to read file");
     (file_name, contents)
-
 }
 
 /// Description
 ///
 /// Arguments
-fn do_map(mapf: &dyn Fn(String, String) -> String) { }
+fn do_map(filename: String, mapf: &dyn Fn(String, String) -> Vec<KeyValue>) -> Vec<KeyValue> { 
+    let (filename, contents) = read_file(filename);
+    mapf(filename, contents)
+}
 
 /// Description
 ///
 /// Arguments
-fn do_reduce(reducef: &dyn Fn(String, Vec<String>) -> String) { }
+///
+// TODO: come up with a better name for preparing the output KeyValue's of mapf for nreduce reducef
+// tasks
+fn prepare_for_reduce(map_task_num: usize, nreduce: usize, kva: Vec<KeyValue>) {
+    // Initialize the vector of nreduce temporary files
+    let mut files: Vec<fs::File> = Vec::with_capacity(nreduce);
+    for reduce_task_num in 0..nreduce {
+        let file = fs::File::create(format!("{:#?}/mr-{}-{}", std::env::current_dir().unwrap().into_os_string().into_string(), map_task_num, reduce_task_num)).unwrap();
+        files.push(file);
+    }
 
+    // Add all KeyValue's to appropriate intermediate files
+    kva.into_iter().for_each(|kv| {
+        let data = format!("{}\n", serde_json::to_string(&kv).unwrap());
+        (&files[hash::<String>(&kv.key) as usize % nreduce])
+            .write(data.as_bytes())
+            .expect("Unable to write to intermediate file"); 
+    });
+}
+
+/// Description
+///
+/// Arguments
+/// * `filename`
+/// * `reducef`
+///
+// NOTE: Need a lock around reduce tasks
+fn do_reduce(filename: String, reducef: &dyn Fn(String, Vec<String>) -> String) { 
+    let mut intermediate: Intermediate = Intermediate::new();
+
+    // Get the reduce task number from the filename, DO NOT move the filename since we still need
+    // to read lines from the filename
+    let re = regex::Regex::new(r"mr-[0-9]+-(?<reduce_num>[0-9]+)").expect("regex pattern invalid");
+    let capture_group = re.captures(&filename).expect("filename is incorrect");
+    let reduce_task_num = (&capture_group)["reduce_task_num"].to_string();
+
+    // Read lines from file into Intermediate
+    if let Ok(lines) = read_lines(filename.clone()) {
+        lines.flatten().for_each(|line| {
+            let kv: KeyValue = serde_json::from_str(&line).unwrap();
+            intermediate.insert(kv.key, kv.value);
+        });    
+    };
+
+    // Open reducef (create if it doesn't exist, append if it does)
+    let mut outputf = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(format!("mr-out-{}", reduce_task_num))
+        .expect("Failed to open output reduce file");
+
+    // Apply reducef to the values in intermediate to a file
+    intermediate.0 // TODO: impl Iterator for Intermediate
+        .into_iter()
+        .for_each(|(k, v)| {
+            outputf.write(format!("{} {}\n", k.clone(), reducef(k, v)).as_bytes())
+                .expect("Failed to write to output file");
+            }
+        );
+    // Delete the intermediate filename
+    fs::remove_file(filename).expect("Failed to remove filename");
+}
+
+// The output is wrapped in a Result to allow matching on errors.
+// Source: https://doc.rust-lang.org/rust-by-example/std_misc/file/read_lines.html
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<fs::File>>>
+where P: AsRef<path::Path>, {
+    let file = fs::File::open(filename).expect("Failed to read filename");
+    Ok(io::BufReader::new(file).lines())
+}

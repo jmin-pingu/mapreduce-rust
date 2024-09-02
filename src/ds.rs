@@ -1,8 +1,23 @@
+use serde::{Serialize, Deserialize};
+use hashbrown::hash_map as base;
 use std::{
     time::{Instant, Duration},
     sync::{Arc, Mutex, MutexGuard},
     collections::HashMap
 };
+
+#[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
+pub struct KeyValue { 
+    pub key: String, 
+    pub value: String
+}
+
+impl KeyValue {
+    pub fn new(key: String, value: String) -> KeyValue {
+        KeyValue{ key, value }
+    }
+} 
 
 /// A Task contains information about the tasks that a Worker will be assigned to 
 /// complete by the Coordinator
@@ -165,7 +180,8 @@ impl TaskManager {
 }
 
 /// DESC
-pub struct Intermediate(HashMap<String, Vec<String>>);
+pub struct Intermediate(pub HashMap<String, Vec<String>>);
+
 
 /// DESC
 impl Intermediate {

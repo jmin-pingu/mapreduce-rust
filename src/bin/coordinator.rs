@@ -74,3 +74,6 @@ pub async fn main() -> anyhow::Result<()> {
         .await;
     Ok(())
 }
+
+/// aggregate_outputf: combine the completed outputf into one file
+fn aggregate_outputf() { }
