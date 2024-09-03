@@ -1,8 +1,12 @@
 [coordinator]
 address="127.1.0.1"
 
-[client]
+[workers]
 address=["127.1.0.1", "127.1.0.1"]
 port=["8080", "8888"]
 
-
+[settings]
+fast=true 
+nreduce=10
+logging=true
+# Add additional functionality

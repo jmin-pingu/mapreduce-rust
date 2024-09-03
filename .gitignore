@@ -1,3 +1,5 @@
-target
+mr/target
+mrapp/target
+core/target
 go_reference
 input
