@@ -2,5 +2,12 @@
 name = "plugins_mrapp"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jonathan Min <jonathanheromin@gmail.com>"]
+
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
+regex = "1.10.6"
+plugins_core = { path = "../core" }
+mr = { path = "../mr" }

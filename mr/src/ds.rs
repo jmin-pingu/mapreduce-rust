@@ -103,8 +103,8 @@ pub enum TaskType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
-    InProgress,
     Idle,
+    InProgress,
     Completed,
 }
 
@@ -141,7 +141,7 @@ impl TaskManager {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         for timed_task in &mut (*taskman) {
-            if timed_task.task.get_state() == State::Idle && (task_type == Some(timed_task.task.get_task_type()) || task_type == None){
+            if timed_task.task.get_state() == State::Idle && (task_type == Some(timed_task.task.get_task_type()) || task_type == None){ // NOTE: double check logic of second logical statement
                 timed_task.task.set_worker(id);
                 return Some(timed_task.task.get_path())
             }         

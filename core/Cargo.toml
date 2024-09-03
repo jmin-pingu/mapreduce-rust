@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+mr = { path = "../mr" }
 
 [build-dependencies]
 rustc_version = "0.4.1"
+

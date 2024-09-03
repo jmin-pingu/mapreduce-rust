@@ -64,7 +64,7 @@ struct Flags {
 
 #[tokio::main]
 pub async fn main() {
-    let x: String = "Testing Response".to_string();
+    let x: String = "Hello World".to_string();
     let handle = thread::spawn(move ||
         send_echo(x)
     );

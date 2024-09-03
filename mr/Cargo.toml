@@ -2,6 +2,8 @@
 name = "mr"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jonathan Min <jonathanheromin@gmail.com>"]
+
 
 [dependencies]
 anyhow = "1.0"

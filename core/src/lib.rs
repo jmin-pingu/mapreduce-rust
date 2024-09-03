@@ -1,14 +1,15 @@
 // Much of the plugin code is inspired by this blog post by Michael Bryan: https://adventures.michaelfbryan.com/posts/plugins-in-rust/
+use mr::ds::KeyValue;
 
 pub static CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
-pub trait Function {
-    fn call(&self, args: &[f64]) -> Result<f64, InvocationError>;
-    
-    fn help(&self) -> Option<&str> {
-        None
-    }
+pub trait MapFunction {
+    fn map(&self, filename: String, contents: String) -> Vec<KeyValue>;
+}
+
+pub trait ReduceFunction {
+    fn reduce(&self, key: String, values: Vec<String>) -> String;
 }
 
 pub enum InvocationError {
@@ -23,7 +24,9 @@ pub struct PluginDeclaration {
 }
 
 pub trait PluginRegistrar {
-    fn register_function(&mut self, name: &str, function: Box<dyn Function>);
+    fn register_map(&mut self, name: &str, function: Box<dyn MapFunction>);
+
+    fn register_reduce(&mut self, name: &str, function: Box<dyn ReduceFunction>);
 }
 
 #[macro_export]
