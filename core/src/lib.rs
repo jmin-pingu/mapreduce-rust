@@ -1,20 +1,32 @@
 // Much of the plugin code is inspired by this blog post by Michael Bryan: https://adventures.michaelfbryan.com/posts/plugins-in-rust/
-use mr::ds::KeyValue;
+use ds::KeyValue;
+
+/// Modules
+pub mod ds;
+
 
 pub static CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
 pub trait MapFunction {
-    fn map(&self, filename: String, contents: String) -> Vec<KeyValue>;
+    fn mapf(&self, filename: String, contents: String) -> Vec<KeyValue>;
 }
 
 pub trait ReduceFunction {
-    fn reduce(&self, key: String, values: Vec<String>) -> String;
+    fn reducef(&self, key: String, values: Vec<String>) -> String;
 }
 
+#[derive(Debug)]
 pub enum InvocationError {
-    InvalidArgumentCount { expected: usize, found: usize }, 
     Other { msg: String },
+}
+
+impl<S: ToString> From<S> for InvocationError {
+    fn from(other: S) -> InvocationError {
+        InvocationError::Other {
+            msg: other.to_string(),
+        }
+    }
 }
 
 pub struct PluginDeclaration {
@@ -24,9 +36,9 @@ pub struct PluginDeclaration {
 }
 
 pub trait PluginRegistrar {
-    fn register_map(&mut self, name: &str, function: Box<dyn MapFunction>);
+    fn register_map(&mut self, function: Box<dyn MapFunction>);
 
-    fn register_reduce(&mut self, name: &str, function: Box<dyn ReduceFunction>);
+    fn register_reduce(&mut self, function: Box<dyn ReduceFunction>);
 }
 
 #[macro_export]
@@ -41,3 +53,4 @@ macro_rules! export_plugin {
         };
     };
 }
+

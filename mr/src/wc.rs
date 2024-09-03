@@ -1,5 +1,5 @@
 use regex::Regex;
-use crate::ds::KeyValue;
+use plugins_core::ds::KeyValue;
 
 fn map(filename: String, contents: String) -> Vec<KeyValue> { 
     let seperator = Regex::new(r"([ \n]+)").expect("Invalid regex");

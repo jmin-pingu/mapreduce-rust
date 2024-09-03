@@ -1,4 +1,5 @@
-use mr::ds::{TaskType, Intermediate, KeyValue};
+use mr::ds::{TaskType, Intermediate};
+use plugins_core::ds::KeyValue;
 use serde_json;
 use std::{
     thread,

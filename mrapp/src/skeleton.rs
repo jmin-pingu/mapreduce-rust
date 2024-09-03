@@ -1,5 +1,5 @@
 use plugins_core::{MapFunction, ReduceFunction, PluginRegistrar};
-use mr::ds::KeyValue;
+use plugins_core::ds::KeyValue;
 
 pub struct Map;
 pub struct Reduce;
@@ -7,11 +7,11 @@ pub struct Reduce;
 plugins_core::export_plugin!(register);
 
 impl MapFunction for Map {
-    fn map(&self, filename: String, contents: String) -> Vec<KeyValue> {  } 
+    fn mapf(&self, filename: String, contents: String) -> Vec<KeyValue> {  } 
 }
 
 impl ReduceFunction for Reduce {
-    fn reduce(&self, key: String, values: Vec<String>) -> String { } 
+    fn reducef(&self, key: String, values: Vec<String>) -> String { } 
 }
 
 extern "C" fn register(registrar: &mut dyn PluginRegistrar) {

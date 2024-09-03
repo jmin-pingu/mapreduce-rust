@@ -1,4 +1,3 @@
-use serde::{Serialize, Deserialize};
 use hashbrown::hash_map as base;
 use std::{
     time::{Instant, Duration},
@@ -6,18 +5,6 @@ use std::{
     collections::HashMap
 };
 
-#[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct KeyValue { 
-    pub key: String, 
-    pub value: String
-}
-
-impl KeyValue {
-    pub fn new(key: String, value: String) -> KeyValue {
-        KeyValue{ key, value }
-    }
-} 
 
 /// A Task contains information about the tasks that a Worker will be assigned to 
 /// complete by the Coordinator
