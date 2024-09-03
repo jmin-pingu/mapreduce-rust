@@ -37,6 +37,15 @@ pub fn worker(
     mapf: &dyn Fn(String, String) -> Vec<KeyValue>, 
     reducef: &dyn Fn(String, Vec<String>) -> String
 ) {
+    // create our functions table and load the plugin
+    let mut functions = mr::ExternalFunctions::new();
+
+    unsafe {
+        functions
+            .load("../target/debug/libplugins_mrapp.so")
+            .expect("Function loading failed");
+    }
+
     // NOTE: RPC GetTask
     let s = "Hello".to_string();
     println!("{}", hash(&s) % 12);
@@ -120,9 +129,11 @@ fn read_file(file_name: String) -> (String, String) {
 /// Description
 ///
 /// Arguments
-fn do_map(filename: String, mapf: &dyn Fn(String, String) -> Vec<KeyValue>) -> Vec<KeyValue> { 
+fn do_map(filename: String, functions: &mr::ExternalFunctions) -> Vec<KeyValue> { 
     let (filename, contents) = read_file(filename);
-    mapf(filename, contents)
+    functions
+        .call_mapf(filename, contents)
+        .expect("Invocation failed")
 }
 
 /// Description
@@ -155,14 +166,14 @@ fn prepare_for_reduce(map_task_num: usize, nreduce: usize, kva: Vec<KeyValue>) {
 /// * `reducef`
 ///
 // NOTE: Need a lock around reduce tasks
-fn do_reduce(filename: String, reducef: &dyn Fn(String, Vec<String>) -> String) { 
+fn do_reduce(filename: String, functions: &mr::ExternalFunctions) {
     let mut intermediate: Intermediate = Intermediate::new();
 
     // Get the reduce task number from the filename, DO NOT move the filename since we still need
     // to read lines from the filename
     let re = regex::Regex::new(r"mr-[0-9]+-(?<reduce_num>[0-9]+)").expect("regex pattern invalid");
     let capture_group = re.captures(&filename).expect("filename is incorrect");
-    let reduce_task_num = (&capture_group)["reduce_task_num"].to_string();
+    let reduce_task_num = (&capture_group)["reduce_num"].to_string();
 
     // Read lines from file into Intermediate
     if let Ok(lines) = read_lines(filename.clone()) {
@@ -183,8 +194,16 @@ fn do_reduce(filename: String, reducef: &dyn Fn(String, Vec<String>) -> String) 
     intermediate.0 // TODO: impl Iterator for Intermediate
         .into_iter()
         .for_each(|(k, v)| {
-            outputf.write(format!("{} {}\n", k.clone(), reducef(k, v)).as_bytes())
-                .expect("Failed to write to output file");
+
+    
+            outputf.write(
+                format!("{} {}\n", 
+                    k.clone(), 
+                    functions
+                        .call_reducef(k, v)
+                        .expect("Invocation failed")
+                    ).as_bytes()
+                ).expect("Failed to write to output file");
             }
         );
     // Delete the intermediate filename

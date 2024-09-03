@@ -1,3 +1,7 @@
-var = test
+SCRIPT=transfer.py
+
+# cargo build --all
+
 clean:
-	echo ${var}
+	# Add logic to check whether mr/mr-* exists
+	@rm mr/mr-*

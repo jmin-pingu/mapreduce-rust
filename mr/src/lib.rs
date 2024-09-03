@@ -100,7 +100,7 @@ impl ExternalFunctions {
 
     pub fn call_reducef(&self, key: String, values: Vec<String>) -> Result<String, plugins_core::InvocationError> {
         if let FunctionProxy::Reduce(func) = self.functions
-            .get("mapf")
+            .get("reducef")
             .ok_or_else(|| format!("\"reducef\" not found"))? 
         {
             Ok(func.reducef(key, values))
