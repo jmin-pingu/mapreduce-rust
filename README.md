@@ -1,6 +1,6 @@
 # Paper Replication: MapReduce
 
-My personal implementation of MapReduce in Rust.
+My personal implementation of [MapReduce](https://research.google/pubs/mapreduce-simplified-data-processing-on-large-clusters/) in Rust.
 
 **Goals**
 - Reimplement MapReduce in Rust.
@@ -9,4 +9,10 @@ My personal implementation of MapReduce in Rust.
 
 ## Implementation Details
 
+
+## References
+
+While I have programmed in Rust, building a working system with Rust is a different
+story. These references helped immensely in learning and building a working project!
+- [Plugins in Rust](https://adventures.michaelfbryan.com/posts/plugins-in-rust/)
 
