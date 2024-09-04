@@ -1,4 +1,4 @@
-use mr::ds::Intermediate;
+use mr::ds::intermediate::Intermediate;
 
 #[test]
 fn test_intermediate() {

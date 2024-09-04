@@ -66,13 +66,14 @@ impl TaskManager {
 
     /// Get the first available Idle task to give to a worker
     // NOTE: Think of a better name for this. 
-    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<String> {
+    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(String, TaskType)> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
+        // TODO: double-check the logic
         for timed_task in &mut (*taskman) {
             if timed_task.task.get_state() == State::Idle && (task_type == Some(timed_task.task.get_task_type()) || task_type == None){ // NOTE: double check logic of second logical statement
                 timed_task.task.set_worker(id);
-                return Some(timed_task.task.get_path())
+                return Some((timed_task.task.get_path(), timed_task.task.get_task_type()))
             }         
         }
         None
@@ -85,6 +86,10 @@ impl TaskManager {
         for timed_task in &mut (*taskman) {
             if timed_task.task.get_path() == task {
                 timed_task.task.set_state(state);
+                if timed_task.task.get_task_type() == TaskType::Map {
+
+                    self.add_task(Task::new(format!("mr-{}-{}", 1, 2), State::Idle, TaskType::Reduce));
+                }
                 return true
             }         
         }

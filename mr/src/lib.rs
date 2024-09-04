@@ -1,10 +1,14 @@
 // Modules
 use plugins_core::ds::KeyValue;
-use libloading::Library;
-use plugins_core::{MapFunction, ReduceFunction, PluginDeclaration};
 use std::{
     alloc::System, collections::HashMap, ffi::OsStr, io,
     rc::Rc,
+};
+use libloading::Library;
+use plugins_core::{
+    MapFunction, 
+    ReduceFunction, 
+    PluginDeclaration
 };
 
 #[global_allocator]
@@ -12,7 +16,6 @@ static ALLOCATOR: System = System;
 
 pub mod ds;
 pub mod rpc;
-pub mod wc;
 pub mod worker;
 
 /// TODO: double-check all source code below

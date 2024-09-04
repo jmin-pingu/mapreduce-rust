@@ -29,7 +29,7 @@ impl Task {
             path, 
             worker: None, 
             state,
-            task_type
+            task_type,
         }
     }
 
