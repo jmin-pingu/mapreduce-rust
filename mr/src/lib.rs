@@ -13,6 +13,7 @@ static ALLOCATOR: System = System;
 pub mod ds;
 pub mod rpc;
 pub mod wc;
+pub mod worker;
 
 /// TODO: double-check all source code below
 // Set-up dynamic loading

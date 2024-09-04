@@ -5,7 +5,10 @@ use tarpc::{
     tokio_serde::formats::Json,
 };
 use futures::{future, prelude::*};
-use mr::ds::{State, TaskType, TaskManager};
+use mr::ds::{
+    task::{State, TaskType}, 
+    taskman::TaskManager
+};
 use clap::Parser;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 

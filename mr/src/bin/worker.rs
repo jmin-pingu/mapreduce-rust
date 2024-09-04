@@ -1,26 +1,30 @@
-use mr::ds::{TaskType, Intermediate};
-use plugins_core::ds::KeyValue;
-use serde_json;
+use mr::{
+    ds::{
+        task::TaskType, 
+        intermediate::Intermediate, 
+    },
+    worker::ReduceType,
+    rpc::TaskServiceClient,
+};
 use std::{
+    net::SocketAddr,
+    time, 
+    hash::{Hasher, Hash, DefaultHasher},
     thread,
     fs,
     io::prelude::*, 
     path, 
     io,
 };
-use clap::Parser;
-use std::{
-    net::SocketAddr,
-    time, 
-};
-use mr::rpc::TaskServiceClient;
-use std::hash::{Hasher, Hash, DefaultHasher};
 use tarpc::{
     client, 
     client::RpcError, 
     context, 
     tokio_serde::formats::Json
 };
+use plugins_core::ds::KeyValue;
+use serde_json;
+use clap::Parser;
 
 /// hash: Calculates the hash for a generic T that implements Hash
 fn hash<T: Hash>(t: &T) -> u64 {
@@ -29,13 +33,15 @@ fn hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
+// NOTE: maybe instead of using a worker function, we can use a worker struct that implements
+// certain behavior
+
 /// Description
 ///
 /// Arguments
-pub fn worker(
+pub fn create_worker(
     id: i8, 
-    mapf: &dyn Fn(String, String) -> Vec<KeyValue>, 
-    reducef: &dyn Fn(String, Vec<String>) -> String
+    reduce_type: ReduceType,
 ) {
     // create our functions table and load the plugin
     let mut functions = mr::ExternalFunctions::new();
@@ -58,8 +64,17 @@ pub fn worker(
         println!("sleeping for 500 millis");
         thread::sleep(delay);
         // do_map(mapf);
+        // TODO: depending on ReduceType, eagerly get reduce tasks when available or wait for no
+        match reduce_type {
+            ReduceType::Expedited => {
+                println!("expedited");
+            }
+            ReduceType::Traditional => {
+                println!("traditional");
+            }
+        }
+        // map tasks 
         // do_reduce(reducef);
-        // NOTE: before reducing, need to make sure that the intermediate file contains all the
         // information from the mapf
     }
     
@@ -166,6 +181,7 @@ fn prepare_for_reduce(map_task_num: usize, nreduce: usize, kva: Vec<KeyValue>) {
 /// * `reducef`
 ///
 // NOTE: Need a lock around reduce tasks
+// NOTE: how to wait for all map tasks to complete
 fn do_reduce(filename: String, functions: &mr::ExternalFunctions) {
     let mut intermediate: Intermediate = Intermediate::new();
 

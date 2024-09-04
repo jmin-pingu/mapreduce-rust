@@ -4,6 +4,7 @@
 - [ ] On a similar note, logging logging logging...
 - [ ] The API for `config.toml`. Need to think about what customizability + features that I want to expose to users of MapReduce. 
 - [ ] Need to figure out configuration of sockets/ports with tarpc lib in Rust. This is just figuring out networking.
+  - [ ] Worker + Coordinator orchestration
 - [ ] Create basic unit tests and integration tests with/without network failures. 
   - Breaking the problem down...
     - [ ] Data structure functionality

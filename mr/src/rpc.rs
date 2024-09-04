@@ -1,4 +1,4 @@
-use crate::ds::TaskType;
+use crate::ds::task::TaskType;
 
 #[tarpc::service]
 pub trait TaskService {
