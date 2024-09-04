@@ -1,4 +1,5 @@
 mr/target
+mr/tests/test_input
 mrapp/target
 core/target
 target
