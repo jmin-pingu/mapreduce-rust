@@ -37,6 +37,11 @@ impl TimedTask {
             self.task.set_state(State::Idle)
         }
     }
+
+    pub fn reset_timer(&mut self) {
+        self.started = Instant::now();
+    }
+
 }
 
 /// A thread safe data structure which keeps track of when a task is started 
@@ -79,6 +84,8 @@ impl TaskManager {
         for timed_task in &mut (*taskman) {
             if timed_task.task.get_state() == State::Idle && (task_type == Some(timed_task.task.get_task_type()) || task_type == None){ // NOTE: double check logic of second logical statement
                 timed_task.task.set_worker(id);
+                timed_task.task.set_state(State::InProgress);
+                timed_task.reset_timer();
                 return Some((timed_task.task.get_path(), timed_task.task.get_task_type()))
             }         
         }
@@ -212,3 +219,6 @@ impl fmt::Display for TaskManagerError {
     }
   }
 }
+
+#[cfg(test)]
+mod test { }

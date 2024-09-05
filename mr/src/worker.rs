@@ -21,7 +21,6 @@ use tarpc::{
     context, 
     tokio_serde::formats::Json
 };
-use clap::Parser;
 
 // How do I implement "waiting for all maps to be completed"
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
