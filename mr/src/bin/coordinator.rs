@@ -35,7 +35,6 @@ struct Flags {
 impl mr::rpc::TaskService for Coordinator {
     async fn get_task(mut self, _: context::Context, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)> {
         let task_todo = self.taskman.get_idle_task(id, task_type);
-        self.taskman.clean(); // Gets rid of completed tasks
         task_todo 
     }
 

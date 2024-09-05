@@ -83,7 +83,7 @@ impl TaskManager {
         // TODO: double-check the logic
         for timed_task in &mut (*taskman) {
             if timed_task.task.get_state() == State::Idle && (task_type == Some(timed_task.task.get_task_type()) || task_type == None){ // NOTE: double check logic of second logical statement
-                timed_task.task.set_worker(id);
+                timed_task.task.set_worker_id(id);
                 timed_task.task.set_state(State::InProgress);
                 timed_task.reset_timer();
                 return Some((timed_task.task.get_path(), timed_task.task.get_task_type()))
@@ -136,8 +136,10 @@ impl TaskManager {
                         // add reduce task immediately
                         // TODO: double-check implementation logic
                         for i in 0..nreduce {
+                            let mut task = Task::new(vec!(format!("mr-{}-{}", id.unwrap(), i)), State::Idle, TaskType::Reduce);
+                            task.set_worker_id(id.unwrap());
                             self.add_task(
-                                Task::new(vec!(format!("mr-{}-{}", id.unwrap(), i)), State::Idle, TaskType::Reduce)
+                                task
                             );
                         }
                     }
@@ -179,7 +181,7 @@ impl TaskManager {
     // pub fn check_task_type(&self) -> bool { } 
 
     /// clean: Remove completed tasks 
-    pub fn clean(&mut self) {
+    fn clean(&mut self) {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         (*taskman).retain(|timed_task| timed_task.task.get_state() != State::Completed);

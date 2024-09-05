@@ -49,8 +49,12 @@ impl Task {
         self.task_type.clone()
     }
 
-    pub fn set_worker(&mut self, worker: i8) { 
+    pub fn set_worker_id(&mut self, worker: i8) { 
         self.worker = Some(worker);
+    }
+
+    pub fn get_worker_id(&self) -> Option<i8> { 
+        self.worker 
     }
 }
 
