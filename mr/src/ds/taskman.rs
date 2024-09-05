@@ -1,10 +1,12 @@
 use std::{
     time::{Instant, Duration},
-    sync::{Arc, Mutex, MutexGuard}
+    sync::{Arc, Mutex, MutexGuard},
+    fmt
 };
+use crate::worker::ReduceType;
 use super::task::{Task, TaskType, State};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A TimedTask is a Task with an associated Instant, which represents when the Task was started
 pub struct TimedTask {
     task: Task,
@@ -66,7 +68,11 @@ impl TaskManager {
 
     /// Get the first available Idle task to give to a worker
     // NOTE: Think of a better name for this. 
-    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(String, TaskType)> {
+
+
+    /// Get the first available Idle task to give to a worker
+    // NOTE: Think of a better name for this. 
+    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         // TODO: double-check the logic
@@ -80,21 +86,88 @@ impl TaskManager {
     }
 
     /// update_state: Update the state of a task if it exists (return true)
-    pub fn update_state(&mut self, task: String, state: State) -> bool {
+    pub fn update_state(&mut self, task: String, state: State) -> Option<TaskType> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         for timed_task in &mut (*taskman) {
-            if timed_task.task.get_path() == task {
+            if timed_task.task.get_path().contains(&task) {
                 timed_task.task.set_state(state);
-                if timed_task.task.get_task_type() == TaskType::Map {
-
-                    self.add_task(Task::new(format!("mr-{}-{}", 1, 2), State::Idle, TaskType::Reduce));
-                }
-                return true
+                return Some(timed_task.task.get_task_type())
             }         
         }
-        false
+        None
     }
+
+    pub fn check_progress(&mut self, task: String, duration: Duration) {
+        let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
+        let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
+        for timed_task in &mut (*taskman) {
+            if timed_task.task.get_path().contains(&task) {
+                timed_task.check_progress(duration);
+            }         
+        }
+    }
+
+    // Implement for debugging
+    pub fn get_task(&mut self, path: String) -> Option<Task> {
+        // TODO: double-check the logic
+        for timed_task in  (*self.list.lock().unwrap()).clone() {
+            if timed_task.task.get_path().contains(&path) {
+                return Some(timed_task.task.clone())
+            }         
+        }
+        None
+    }
+
+    pub fn task_completed(&mut self, task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, id: Option<i8>) -> Result<(), TaskManagerError> {
+        match self.update_state(task, State::Completed) {
+            Some(TaskType::Map) => {
+                // Remove completed tasks
+                self.clean();
+                match reduce_type {
+                    ReduceType::Expedited => {
+                        // add reduce task immediately
+                        // TODO: double-check implementation logic
+                        for i in 0..nreduce {
+                            self.add_task(
+                                Task::new(vec!(format!("mr-{}-{}", id.unwrap(), i)), State::Idle, TaskType::Reduce)
+                            );
+                        }
+                    }
+                    ReduceType::Traditional => {
+                        // add reduce task only if no map tasks remain (this only happens when the
+                        // last map task is completed
+                        if self.get_size(Some(TaskType::Map)) == 0 {
+                            (0..nreduce)
+                                .into_iter()
+                                .for_each(|j| {
+                                self.add_task(
+                                    Task::new(
+                                        (0..nmap)
+                                            .into_iter()
+                                            .map(|i| format!("mr-{}-{}", i, j))
+                                            .collect::<Vec<String>>(),
+                                        State::Idle,
+                                        TaskType::Reduce,
+                                    )
+                                );
+                            });
+                        }
+                    }
+                }
+                Ok(())
+            }
+            Some(TaskType::Reduce) => {
+                // Remove completed tasks
+                self.clean();
+                Ok(())
+            }
+            None => {
+                panic!("Task did not exist in the task manager.")
+            }
+        }
+    }
+
 
     // pub fn check_task_type(&self) -> bool { } 
 
@@ -106,10 +179,36 @@ impl TaskManager {
     }
 
     /// get_size: Get the size of the list of tasks remaining 
-    pub fn get_size(&self) -> usize {
+    pub fn get_size(&self, task_type: Option<TaskType>) -> usize {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
-        (*taskman).len()
+
+        if let Some(task_type) = task_type {
+            let mut count: usize = 0;
+            (*taskman).iter().for_each(|task| {
+                if task.task.get_task_type() == task_type {
+                    count += 1
+                };
+            });
+            count
+        } else {
+            (*taskman).len()
+        }
     }
 }
 
+
+#[derive(Debug)]
+pub enum TaskManagerError {
+    TaskCompletedError,
+}
+
+impl std::error::Error for TaskManagerError {}
+
+impl fmt::Display for TaskManagerError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      TaskManagerError::TaskCompletedError => write!(f, "Task Completed Error"),
+    }
+  }
+}

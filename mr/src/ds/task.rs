@@ -15,16 +15,16 @@ pub enum State {
 /// complete by the Coordinator
 // NOTE: we can also pair a path with a UUID so that tasks with the same path are distinguishable.
 // However, this is pointless as paths should be unique (assumption)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Task { 
-    path: String, 
+    path: Vec<String>, 
     worker: Option<i8>,
     state: State,
     task_type: TaskType, 
 }
 
 impl Task {
-    pub fn new(path: String, state: State, task_type: TaskType) -> Self { 
+    pub fn new(path: Vec<String>, state: State, task_type: TaskType) -> Self { 
         Task {
             path, 
             worker: None, 
@@ -41,7 +41,7 @@ impl Task {
         self.state.clone()
     }
 
-    pub fn get_path(&self) -> String { 
+    pub fn get_path(&self) -> Vec<String> { 
         self.path.clone()
     }
 
