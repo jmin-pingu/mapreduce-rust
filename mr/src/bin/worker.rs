@@ -12,6 +12,9 @@ struct Flags {
     worker_id: i8,
     
     #[clap(long)]
+    nmap: usize,
+
+    #[clap(long)]
     nreduce: usize,
 
     #[clap(long)]
@@ -23,7 +26,7 @@ struct Flags {
 
 #[tokio::main]
 pub async fn main() {
-    let mut functions = mr::ExternalFunctions::new();
+    let mut functions = mr::plugins::ExternalFunctions::new();
 
     unsafe {
         functions
@@ -33,7 +36,7 @@ pub async fn main() {
 
     let x: String = "Hello World".to_string();
     let flags = Flags::parse();
-    let worker: Worker = create_worker(flags.worker_id, ReduceType::Expedited, flags.nreduce, flags.server_addr);
+    let worker: Worker = create_worker(flags.worker_id, ReduceType::Expedited, flags.nreduce, flags.nmap, flags.server_addr);
      
     let handle = thread::spawn(move ||
         worker.send_echo(x)
@@ -51,11 +54,12 @@ pub fn create_worker(
     id: i8, 
     reduce_type: ReduceType,
     nreduce: usize,
+    nmap: usize,
     server_addr: SocketAddr
 ) -> Worker {
     // create our functions table and load the plugin
 
-    Worker::new(id, reduce_type, nreduce, server_addr)
+    Worker::new(id, reduce_type, nreduce, nmap, server_addr)
 }
 
 //    let delay = time::Duration::from_millis(250);

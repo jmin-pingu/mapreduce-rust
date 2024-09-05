@@ -4,6 +4,7 @@ use tarpc::{
     server::{self, incoming::Incoming, Channel},
     tokio_serde::formats::Json,
 };
+use mr::worker::ReduceType;
 use futures::{future, prelude::*};
 use mr::ds::{
     task::{State, TaskType}, 
@@ -29,15 +30,17 @@ struct Flags {
     path: String,
 }
 
+// NOTE: enumerate all the input files myself (i.e. give them unique monotonically increasing IDs)
+
 impl mr::rpc::TaskService for Coordinator {
-    async fn get_task(mut self, _: context::Context, id: i8, task_type: Option<TaskType>) -> Option<(String, TaskType)> {
+    async fn get_task(mut self, _: context::Context, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)> {
         let task_todo = self.taskman.get_idle_task(id, task_type);
         self.taskman.clean(); // Gets rid of completed tasks
         task_todo 
     }
 
-    async fn completed_task(mut self, _: context::Context, task: String) -> bool { 
-        self.taskman.update_state(task, State::Completed)
+    async fn completed_task(mut self, _: context::Context, task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, id: Option<i8>){ 
+        self.taskman.task_completed(task, reduce_type, nreduce, nmap, id).unwrap()
     }    
 
     async fn echo(self, _: context::Context, input: String) -> String {
