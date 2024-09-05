@@ -1,4 +1,5 @@
 use crate::ds::intermediate::Intermediate;
+use crate::plugins::ExternalFunctions;
 use plugins_core::ds::KeyValue;
 use std::{
     net::SocketAddr,
@@ -23,7 +24,7 @@ use tarpc::{
 use clap::Parser;
 
 // How do I implement "waiting for all maps to be completed"
-#[derive(Debug)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum ReduceType {
     Expedited,
     Traditional,
@@ -33,16 +34,18 @@ pub struct Worker {
     worker_id: i8,    
     reduce_type: ReduceType,
     nreduce: usize,
+    nmap: usize,
     server_addr: SocketAddr
     // NOTE: do I want to add additional metadata?
 }
 
 impl Worker {
-    pub fn new(worker_id: i8, reduce_type: ReduceType, nreduce: usize, server_addr: SocketAddr) -> Self {
+    pub fn new(worker_id: i8, reduce_type: ReduceType, nreduce: usize, nmap: usize, server_addr: SocketAddr) -> Self {
         Worker {
             worker_id, 
             reduce_type,
             nreduce, 
+            nmap,
             server_addr
         }
     }
@@ -56,7 +59,7 @@ impl Worker {
         match self.reduce_type {
             ReduceType::Expedited => {
                 // Get whatever task is available.
-                let task = self.send_get_task(None)
+                let task = self.send_get_task(None);
             }
             ReduceType::Traditional => {
                 let map_task = self.send_get_task(Some(TaskType::Map));
@@ -72,7 +75,7 @@ impl Worker {
     /// Description
     ///
     /// Arguments
-    pub fn do_map(&self, filename: String, functions: &crate::ExternalFunctions) -> Vec<KeyValue> {
+    pub fn do_map(&self, filename: String, functions: &ExternalFunctions) -> Vec<KeyValue> {
         let (filename, contents) = self.read_file(filename);
         functions
             .call_mapf(filename, contents)
@@ -102,7 +105,7 @@ impl Worker {
         });
     }
 
-    pub fn do_reduce(&self, filename: String, functions: &crate::ExternalFunctions) {
+    pub fn do_reduce(&self, filename: String, functions: &ExternalFunctions) {
         let mut intermediate: Intermediate = Intermediate::new();
     
         // Get the reduce task number from the filename, DO NOT move the filename since we still need
@@ -171,15 +174,15 @@ impl Worker {
 
     /// Define client-side RPC calls
     #[tokio::main]
-    pub async fn send_completed_task(&self, task: String) -> Result<bool, RpcError> {
+    pub async fn send_completed_task(&self, task: String, id: Option<i8>) -> Result<(), RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
         transport.config_mut().max_frame_length(usize::MAX);
         let client: TaskServiceClient = TaskServiceClient::new(client::Config::default(), transport.await.unwrap()).spawn();
-        client.completed_task(context::current(), task).await
+        client.completed_task(context::current(), task, self.reduce_type.clone(), self.nreduce, self.nmap, id).await
     }
 
     #[tokio::main]
-    pub async fn send_get_task(&self, task_type: Option<TaskType>) -> Result<Option<(String, TaskType)>, RpcError> {
+    pub async fn send_get_task(&self, task_type: Option<TaskType>) -> Result<Option<(Vec<String>, TaskType)>, RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
     
         transport.config_mut().max_frame_length(usize::MAX);

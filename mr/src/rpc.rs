@@ -1,4 +1,5 @@
 use crate::ds::task::TaskType;
+use crate::worker::ReduceType;
 
 #[tarpc::service]
 pub trait TaskService {
@@ -10,7 +11,7 @@ pub trait TaskService {
     /// * `id`: the worker id
     /// * `task_type`: the desired TaskType. If None, then gets either TaskType::Map or TaskType::Reduce, with a priority for TaskType::Map.
     ///
-    async fn get_task(id: i8, task_type: Option<TaskType>) -> Option<(String, TaskType)>;
+    async fn get_task(id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)>;
 
     /// completed_task: a RPC which communicates whether a task is completed, where the task is
     /// denoted by its path. The function returns a bool to indicate whether communication was
@@ -20,7 +21,7 @@ pub trait TaskService {
     ///
     /// * `task`: the path of the task that has been completed
     ///
-    async fn completed_task(task: String) -> bool;
+    async fn completed_task(task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, id: Option<i8>);
 
     /// echo: an example RPC which has the same functionality as the `echo` syscall to test tarpc
     /// functionality
