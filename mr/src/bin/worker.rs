@@ -7,7 +7,6 @@ use clap::Parser;
 
 #[derive(Parser)]
 struct Flags {
-    /// Sets the (NOTE SERVER) server address to connect to.
     #[clap(long)]
     worker_id: i8,
     
@@ -20,6 +19,7 @@ struct Flags {
     #[clap(long)]
     reduce_type: Option<String>,
 
+    /// Sets the SERVER address to connect to.
     #[clap(long)]
     server_addr: SocketAddr,
 }
@@ -61,11 +61,4 @@ pub fn create_worker(
 
     Worker::new(id, reduce_type, nreduce, nmap, server_addr)
 }
-
-//    let delay = time::Duration::from_millis(250);
-//    loop {
-//        println!("sleeping for 500 millis");
-//        thread::sleep(delay);
-//    }
-
 
