@@ -4,6 +4,7 @@ use std::{
     fmt
 };
 use crate::worker::ReduceType;
+use crate::ds::MapReduceStatus;
 use super::task::{Task, TaskType, TaskID, State};
 
 #[derive(Debug, Clone)]
@@ -112,10 +113,10 @@ impl TaskManager {
             timed_task.check_progress(duration);
         }
     }
-    pub fn get_task_id(&mut self, path: String) -> Option<i8> {
+    pub fn get_task_id(&self, path: String) -> Option<i8> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
-        let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
-        for timed_task in &mut (*taskman) {
+        let taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
+        for timed_task in &(*taskman) {
             if timed_task.task.get_path().contains(&path) {
                 return timed_task.task.get_task_id()
             }         
@@ -136,8 +137,9 @@ impl TaskManager {
     pub fn task_completed(&mut self, path: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, worker_id: i8) -> Result<(), TaskManagerError> {
         match self.update_state(path.clone(), State::Completed) {
             Some(TaskType::Map) => {
-                // Remove completed tasks
+                let map_task_id = self.get_task_id(path.clone()).unwrap();
                 self.clean();
+                // Remove completed tasks
                 match reduce_type {
                     ReduceType::Expedited => {
                         // add reduce task immediately
@@ -146,7 +148,7 @@ impl TaskManager {
                             let mut task = Task::new(
                                 // TODO: change TaskManager methods to use &str type rather than
                                 // owned String type
-                                vec!(format!("mr-{}-{}", self.get_task_id(path.clone()).unwrap(), i)), 
+                                vec!(format!("mr-{}-{}", map_task_id, i)), 
                                 TaskType::Reduce,
                                 TaskID::ReduceID,
                                 );
@@ -197,8 +199,16 @@ impl TaskManager {
         (*taskman).retain(|timed_task| timed_task.task.get_state() != State::Completed);
     }
 
+    pub fn status(&self) -> MapReduceStatus {
+        if self.get_size(None) == 0 {
+            MapReduceStatus::Completed
+        } else {
+            MapReduceStatus::InProgress
+        }
+    }
+
     /// get_size: Get the size of the list of tasks remaining 
-    pub fn get_size(&self, task_type: Option<TaskType>) -> usize {
+    fn get_size(&self, task_type: Option<TaskType>) -> usize {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
 
