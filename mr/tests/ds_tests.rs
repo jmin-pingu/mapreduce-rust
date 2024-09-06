@@ -5,6 +5,8 @@ use std::{
     thread,
     sync::{Arc, Mutex}
 };
+use std::time::{Instant, Duration};
+use tokio::task;
 use mr::ds::task::*;
 #[test]
 fn test_intermediate() {
@@ -25,12 +27,12 @@ fn test_intermediate() {
 #[test]
 fn test_taskman_single_threaded() { 
     let mut taskman = taskman::TaskManager::new();
-    let task1 = task::Task::new(vec!(String::from("a")), State::Idle, TaskType::Map);
-    let task2 = task::Task::new(vec!(String::from("b"), String::from("c")), State::Idle, TaskType::Map);
-    let task3 = task::Task::new(vec!(String::from("d"), String::from("f"), String::from("g")), State::Idle, TaskType::Map);
-    let task4 = task::Task::new(vec!(String::from("h")), State::Idle, TaskType::Map);
-    let task5 = task::Task::new(vec!(String::from("i")), State::Idle, TaskType::Reduce);
-    let task6 = task::Task::new(vec!(String::from("j")), State::Idle, TaskType::Reduce);
+    let task1 = Task::new(vec!(String::from("a")), State::Idle, TaskType::Map);
+    let task2 = Task::new(vec!(String::from("b"), String::from("c")), State::Idle, TaskType::Map);
+    let task3 = Task::new(vec!(String::from("d"), String::from("f"), String::from("g")), State::Idle, TaskType::Map);
+    let task4 = Task::new(vec!(String::from("h")), State::Idle, TaskType::Map);
+    let task5 = Task::new(vec!(String::from("i")), State::Idle, TaskType::Reduce);
+    let task6 = Task::new(vec!(String::from("j")), State::Idle, TaskType::Reduce);
 
     taskman.add_task(task1);
     taskman.update_state(String::from("a"), State::InProgress);
@@ -138,7 +140,7 @@ fn test_taskman_single_threaded() {
 fn test_taskman_multi_threaded() { 
     let mut taskman = taskman::TaskManager::new();
     // Add several tasks
-    (0..100).for_each(|i| taskman.add_task(task::Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
+    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
     assert_eq!(taskman.get_size(None), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
@@ -146,8 +148,9 @@ fn test_taskman_multi_threaded() {
     let ts_taskman = Arc::new(Mutex::new(taskman));
     let mut handles = vec![];
    
-    let n: i8 = 50;
 
+    // Get rid of n tasks
+    let n: i8 = 50;
     for k in 0..n {
         let task_ref= Arc::clone(&ts_taskman);
         let handle = thread::spawn(move ||
@@ -168,22 +171,133 @@ fn test_taskman_multi_threaded() {
     }
 
     let task_ref= Arc::clone(&ts_taskman);
-    let safe_taskman = task_ref.lock().unwrap();
-    assert_eq!(safe_taskman.get_size(None), 100 - n as usize);
-    assert_eq!(safe_taskman.get_size(Some(TaskType::Map)), 100 - n as usize);
-    assert_eq!(safe_taskman.get_size(Some(TaskType::Reduce)), 0);
+    {
+        let safe_taskman = task_ref.lock().unwrap();
+        assert_eq!(safe_taskman.get_size(None), 100 - n as usize);
+        assert_eq!(safe_taskman.get_size(Some(TaskType::Map)), 100 - n as usize);
+        assert_eq!(safe_taskman.get_size(Some(TaskType::Reduce)), 0);
+    }
+
+    // Get rid of the rest of tasks
+    let mut handles = vec![];
+    for k in 0..(100 - n) {
+        let task_ref= Arc::clone(&ts_taskman);
+        let handle = thread::spawn(move ||
+            {
+                let mut thread_taskman = task_ref.lock().unwrap();
+                let (paths, task_type) = (*thread_taskman).get_idle_task(k, None).unwrap();
+                assert_eq!(task_type, TaskType::Map);
+                let path = paths[0].clone();
+                assert!(path.parse::<usize>().expect("Failed to parse path") <= 100 as usize && path.parse::<usize>().expect("Failed to parse path") >= n as usize);
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+
+            });
+        handles.push(handle);
+    };
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    {
+        let task_ref= Arc::clone(&ts_taskman);
+        let safe_taskman = task_ref.lock().unwrap();
+        assert_eq!(safe_taskman.get_size(None), 10 as usize);
+        assert_eq!(safe_taskman.get_size(Some(TaskType::Map)), 0);
+        assert_eq!(safe_taskman.get_size(Some(TaskType::Reduce)), 10);
+    }
 
 
+    let mut handles = vec![];
+    for k in 0..10 {
+        let task_ref= Arc::clone(&ts_taskman);
+        let handle = thread::spawn(move ||
+            {
+                let mut thread_taskman = task_ref.lock().unwrap();
+                let (paths, task_type) = (*thread_taskman).get_idle_task(k, None).unwrap();
+                assert_eq!(task_type, TaskType::Reduce);
+                let path = paths[0].clone();
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+
+            });
+        handles.push(handle);
+    };
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
 }
 
-#[test]
-fn test3() { }
+#[tokio::test]
+async fn async_taskman_multithread_completion() { 
+    let mut taskman = taskman::TaskManager::new();
+    // Add several tasks
+    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
+    assert_eq!(taskman.get_size(None), 100);
+    assert_eq!(taskman.get_size(Some(TaskType::Map)), 100);
+    assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
 
-#[test]
-fn test4() { }
+    let ts_taskman = Arc::new(Mutex::new(taskman));
+    let mut completed: bool = false;
 
-#[test]
-fn test5() { }
+    while !completed {
+        // Update completed when taskman is empty
+        
+        let task_ref= Arc::clone(&ts_taskman);
+        let join = task::spawn(async move { 
+            {
+                let mut thread_taskman = task_ref.lock().unwrap();
+                let (paths, _) = (*thread_taskman).get_idle_task(1, None).expect("No tasks remaining");
+                let path = paths[0].clone();
+                println!("Completed {}", path);
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+            }});
+        join.await.unwrap();
+        {
+            let task_ref= Arc::clone(&ts_taskman);
+            let safe_taskman = task_ref.lock().unwrap();
+            if safe_taskman.get_size(None) == 0 {
+                completed = true;
+            }
+        }
+    };
+   
+}
 
-#[test]
-fn test6() { }
+#[tokio::test]
+async fn async_taskman_multithread_delays_completion() { 
+    let mut taskman = taskman::TaskManager::new();
+    // Add several tasks
+    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
+    assert_eq!(taskman.get_size(None), 100);
+    assert_eq!(taskman.get_size(Some(TaskType::Map)), 100);
+    assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
+
+    let ts_taskman = Arc::new(Mutex::new(taskman));
+    let mut completed: bool = false;
+
+    while !completed {
+        // Update completed when taskman is empty
+        
+        let task_ref= Arc::clone(&ts_taskman);
+        let join = task::spawn(async move { 
+            {
+                let mut thread_taskman = task_ref.lock().unwrap();
+                let (paths, _) = (*thread_taskman).get_idle_task(1, None).expect("No tasks remaining");
+                let path = paths[0].clone();
+                println!("Started {}", path);
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+            }});
+        join.await.unwrap();
+        {
+            let task_ref= Arc::clone(&ts_taskman);
+            let safe_taskman = task_ref.lock().unwrap();
+            if safe_taskman.get_size(None) == 0 {
+                completed = true;
+            }
+        }
+    };
+}
+
+#[tokio::test]
+async fn async_taskman_xxx() { }
