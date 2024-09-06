@@ -37,9 +37,9 @@ fn test_taskman_single_threaded() {
     taskman.update_state(String::from("a"), State::InProgress);
     let delay = time::Duration::from_millis(100);
     thread::sleep(delay);
-    taskman.check_progress(String::from("a"), time::Duration::from_millis(500));
+    taskman.check_progress(time::Duration::from_millis(500));
     assert_eq!(taskman.get_task("a".to_string()).unwrap().get_state(), State::InProgress);
-    taskman.check_progress(String::from("a"), time::Duration::from_millis(100));
+    taskman.check_progress( time::Duration::from_millis(100));
     assert_eq!(taskman.get_task("a".to_string()).unwrap().get_state(), State::Idle);
 
     // Size checks

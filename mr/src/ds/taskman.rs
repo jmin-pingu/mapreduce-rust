@@ -105,16 +105,13 @@ impl TaskManager {
         None
     }
 
-    pub fn check_progress(&mut self, task: String, duration: Duration) {
+    pub fn check_progress(&mut self, duration: Duration) {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         for timed_task in &mut (*taskman) {
-            if timed_task.task.get_path().contains(&task) {
-                timed_task.check_progress(duration);
-            }         
+            timed_task.check_progress(duration);
         }
     }
-
     pub fn get_task_id(&mut self, path: String) -> Option<i8> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
@@ -146,8 +143,9 @@ impl TaskManager {
                         // add reduce task immediately
                         // TODO: double-check implementation logic
                         for i in 0..nreduce {
-                            // TODO: get id from task
                             let mut task = Task::new(
+                                // TODO: change TaskManager methods to use &str type rather than
+                                // owned String type
                                 vec!(format!("mr-{}-{}", self.get_task_id(path.clone()).unwrap(), i)), 
                                 TaskType::Reduce,
                                 TaskID::ReduceID,
@@ -191,9 +189,6 @@ impl TaskManager {
             }
         }
     }
-
-
-    // pub fn check_task_type(&self) -> bool { } 
 
     /// clean: Remove completed tasks 
     fn clean(&mut self) {
