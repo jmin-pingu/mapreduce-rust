@@ -1,6 +1,7 @@
 # Todo List
 ## Priority to Learn + Implement
 - [ ] Documentation documentation documentation...
+- [ ] Need to use lifetimes... This is the whole point of rust. Change String -> &str when possible. 
 - [ ] On a similar note, logging logging logging...
 - [ ] The API for `config.toml`. Need to think about what customizability + features that I want to expose to users of MapReduce. 
 - [ ] Need to figure out configuration of sockets/ports with tarpc lib in Rust. This is just figuring out networking.
