@@ -10,7 +10,7 @@ use std::time::Duration;
 use clap::Parser;
 use tokio::task;
 
-const DELAY: Duration = Duration::from_millis(500);
+const DELAY: Duration = Duration::from_millis(250);
 
 #[derive(Parser)]
 struct Flags {
@@ -37,27 +37,36 @@ pub async fn main() {
 
     unsafe {
         functions
-            .load("../target/debug/libplugins_mrapp.so")
+            .load("target/debug/libplugins_mrapp.so")
             .expect("failed to dynamically load map, reduce functions, double-check crate mrapp");
     }
 
     let flags = Flags::parse();
     let worker: Worker = create_worker(flags.worker_id, ReduceType::Expedited, flags.nreduce, flags.nmap, flags.server_addr);
-     
+    work_until_completion(worker, flags.worker_id).await;
+}
+
+async fn work_until_completion(worker: Worker, id: i8) {
+    println!("Spawning Worker {}", id);
     let join = task::spawn( async move { 
         loop { 
             // TODO: need a condition to exit
+            println!("Retry connection");
             match worker.do_work() {
                MapReduceStatus::Completed => { 
-                   println!("Worker {} Completed", flags.worker_id);
+                   println!("Worker {} Completed", id);
                    break 
                }
-               _ => {}
+               _ => {
+                   let response = worker.send_echo(String::from("hello world")).await;
+                   println!("Worker {} In Progress: Response, {:#?}", id, response);
+               }
             }
             thread::sleep(DELAY);
         }
     });
-    join.await.unwrap();
+    let val = join.await;
+    println!("{:#?}", val);
 }
 
 /// Description
