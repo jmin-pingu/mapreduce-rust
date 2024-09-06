@@ -21,15 +21,36 @@ pub struct Task {
     worker: Option<i8>,
     state: State,
     task_type: TaskType, 
+    id: TaskID,
+}
+
+#[derive(Debug, Clone)]
+pub enum TaskID {
+    MapID(i8), 
+    ReduceID
+}
+
+impl TaskID {
+    pub fn get_id(&self) -> Option<i8>{
+        match self {
+            TaskID::MapID(id) => {
+                Some(*id)
+            }
+            TaskID::ReduceID => {
+                None
+            }
+        }
+    }
 }
 
 impl Task {
-    pub fn new(path: Vec<String>, state: State, task_type: TaskType) -> Self { 
+    pub fn new(path: Vec<String>, task_type: TaskType, id: TaskID) -> Self { 
         Task {
             path, 
             worker: None, 
-            state,
+            state: State::Idle,
             task_type,
+            id, 
         }
     }
 
@@ -55,6 +76,10 @@ impl Task {
 
     pub fn get_worker_id(&self) -> Option<i8> { 
         self.worker 
+    }
+
+    pub fn get_task_id(&self) -> Option<i8> { 
+        self.id.get_id()
     }
 }
 

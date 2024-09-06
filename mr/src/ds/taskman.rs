@@ -4,7 +4,7 @@ use std::{
     fmt
 };
 use crate::worker::ReduceType;
-use super::task::{Task, TaskType, State};
+use super::task::{Task, TaskType, TaskID, State};
 
 #[derive(Debug, Clone)]
 /// A TimedTask is a Task with an associated Instant, which represents when the Task was started
@@ -115,6 +115,16 @@ impl TaskManager {
         }
     }
 
+    pub fn get_task_id(&mut self, path: String) -> Option<i8> {
+        let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
+        let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
+        for timed_task in &mut (*taskman) {
+            if timed_task.task.get_path().contains(&path) {
+                return timed_task.task.get_task_id()
+            }         
+        }
+        None
+    }
     // Implement for debugging
     pub fn get_task(&mut self, path: String) -> Option<Task> {
         // TODO: double-check the logic
@@ -126,8 +136,8 @@ impl TaskManager {
         None
     }
 
-    pub fn task_completed(&mut self, task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, id: Option<i8>) -> Result<(), TaskManagerError> {
-        match self.update_state(task, State::Completed) {
+    pub fn task_completed(&mut self, path: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, worker_id: i8) -> Result<(), TaskManagerError> {
+        match self.update_state(path.clone(), State::Completed) {
             Some(TaskType::Map) => {
                 // Remove completed tasks
                 self.clean();
@@ -136,8 +146,13 @@ impl TaskManager {
                         // add reduce task immediately
                         // TODO: double-check implementation logic
                         for i in 0..nreduce {
-                            let mut task = Task::new(vec!(format!("mr-{}-{}", id.unwrap(), i)), State::Idle, TaskType::Reduce);
-                            task.set_worker_id(id.unwrap());
+                            // TODO: get id from task
+                            let mut task = Task::new(
+                                vec!(format!("mr-{}-{}", self.get_task_id(path.clone()).unwrap(), i)), 
+                                TaskType::Reduce,
+                                TaskID::ReduceID,
+                                );
+                            task.set_worker_id(worker_id);
                             self.add_task(
                                 task
                             );
@@ -156,8 +171,8 @@ impl TaskManager {
                                             .into_iter()
                                             .map(|i| format!("mr-{}-{}", i, j))
                                             .collect::<Vec<String>>(),
-                                        State::Idle,
                                         TaskType::Reduce,
+                                        TaskID::ReduceID
                                     )
                                 );
                             });
