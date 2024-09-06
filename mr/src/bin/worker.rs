@@ -4,6 +4,10 @@ use std::{
     thread,
 };
 use clap::Parser;
+use tokio::task;
+use std::time::Duration;
+
+const DELAY: Duration = Duration::from_millis(500);
 
 #[derive(Parser)]
 struct Flags {
@@ -38,13 +42,16 @@ pub async fn main() {
     let flags = Flags::parse();
     let worker: Worker = create_worker(flags.worker_id, ReduceType::Expedited, flags.nreduce, flags.nmap, flags.server_addr);
      
-    let handle = thread::spawn(move ||
-        worker.send_echo(x)
-    );
+    let join = task::spawn( async move { 
+        loop { 
+            worker.do_work();
+            let y = worker.send_echo(x);
+        }
 
-    let result = handle.join().unwrap().unwrap();
+    });
+
+    let result = join.await.unwrap();
     println!("{}", result);
-
 }
 
 /// Description
