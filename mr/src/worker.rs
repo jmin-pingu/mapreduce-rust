@@ -61,7 +61,7 @@ impl Worker {
                 let task = self.send_get_task(None);
             }
             ReduceType::Traditional => {
-                let map_task = self.send_get_task(Some(TaskType::Map));
+                map_task = self.send_get_task(Some(TaskType::Map));
 
                 let reduce_task = self.send_get_task(Some(TaskType::Reduce));
                 println!("traditional");
