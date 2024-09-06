@@ -1,11 +1,14 @@
-use mr::worker::{ReduceType, Worker};
+use mr::{
+    worker::{ReduceType, Worker},
+    ds::MapReduceStatus
+};
 use std::{
     net::SocketAddr,
     thread,
 };
+use std::time::Duration;
 use clap::Parser;
 use tokio::task;
-use std::time::Duration;
 
 const DELAY: Duration = Duration::from_millis(500);
 
@@ -35,23 +38,26 @@ pub async fn main() {
     unsafe {
         functions
             .load("../target/debug/libplugins_mrapp.so")
-            .expect("Function loading failed");
+            .expect("failed to dynamically load map, reduce functions, double-check crate mrapp");
     }
 
-    let x: String = "Hello World".to_string();
     let flags = Flags::parse();
     let worker: Worker = create_worker(flags.worker_id, ReduceType::Expedited, flags.nreduce, flags.nmap, flags.server_addr);
      
     let join = task::spawn( async move { 
         loop { 
-            worker.do_work();
-            let y = worker.send_echo(x);
+            // TODO: need a condition to exit
+            match worker.do_work() {
+               MapReduceStatus::Completed => { 
+                   println!("Worker {} Completed", flags.worker_id);
+                   break 
+               }
+               _ => {}
+            }
+            thread::sleep(DELAY);
         }
-
     });
-
-    let result = join.await.unwrap();
-    println!("{}", result);
+    join.await.unwrap();
 }
 
 /// Description

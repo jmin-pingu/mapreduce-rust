@@ -21,7 +21,7 @@ pub trait TaskService {
     ///
     /// * `task`: the path of the task that has been completed
     ///
-    async fn completed_task(task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, id: Option<i8>);
+    async fn completed_task(task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, worker_id: i8);
 
     /// echo: an example RPC which has the same functionality as the `echo` syscall to test tarpc
     /// functionality

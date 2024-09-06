@@ -5,7 +5,6 @@ use std::{
     thread,
     sync::{Arc, Mutex}
 };
-use std::time::{Instant, Duration};
 use tokio::task;
 use mr::ds::task::*;
 #[test]
@@ -27,12 +26,12 @@ fn test_intermediate() {
 #[test]
 fn test_taskman_single_threaded() { 
     let mut taskman = taskman::TaskManager::new();
-    let task1 = Task::new(vec!(String::from("a")), State::Idle, TaskType::Map);
-    let task2 = Task::new(vec!(String::from("b"), String::from("c")), State::Idle, TaskType::Map);
-    let task3 = Task::new(vec!(String::from("d"), String::from("f"), String::from("g")), State::Idle, TaskType::Map);
-    let task4 = Task::new(vec!(String::from("h")), State::Idle, TaskType::Map);
-    let task5 = Task::new(vec!(String::from("i")), State::Idle, TaskType::Reduce);
-    let task6 = Task::new(vec!(String::from("j")), State::Idle, TaskType::Reduce);
+    let task1 = Task::new(vec!(String::from("a")), TaskType::Map, TaskID::MapID(0));
+    let task2 = Task::new(vec!(String::from("b"), String::from("c")), TaskType::Map, TaskID::MapID(1));
+    let task3 = Task::new(vec!(String::from("d"), String::from("f"), String::from("g")), TaskType::Map, TaskID::MapID(2));
+    let task4 = Task::new(vec!(String::from("h")), TaskType::Map, TaskID::MapID(3));
+    let task5 = Task::new(vec!(String::from("i")), TaskType::Reduce, TaskID::ReduceID);
+    let task6 = Task::new(vec!(String::from("j")), TaskType::Reduce, TaskID::ReduceID);
 
     taskman.add_task(task1);
     taskman.update_state(String::from("a"), State::InProgress);
@@ -67,7 +66,7 @@ fn test_taskman_single_threaded() {
     assert_eq!(taskman.get_task(String::from("a")).unwrap().get_state(), State::InProgress);
     assert_eq!(taskman.get_task(String::from("b")).unwrap().get_state(), State::InProgress);
     
-    taskman.task_completed(String::from("a"), ReduceType::Traditional, 2, 2, None).unwrap();
+    taskman.task_completed(String::from("a"), ReduceType::Traditional, 2, 2, 0).unwrap();
     assert_eq!(taskman.get_size(None), 5);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 3);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 2);
@@ -76,14 +75,14 @@ fn test_taskman_single_threaded() {
     assert_eq!(taskman.get_idle_task(2, Some(TaskType::Reduce)), Some((vec!(String::from("i")), TaskType::Reduce)));
     assert_eq!(taskman.get_idle_task(3, Some(TaskType::Reduce)), Some((vec!(String::from("j")), TaskType::Reduce)));
 
-    taskman.task_completed(String::from("b"), ReduceType::Traditional, 2, 2, None).unwrap();
+    taskman.task_completed(String::from("b"), ReduceType::Traditional, 2, 2, 0).unwrap();
     assert_eq!(taskman.get_size(None), 4);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 2);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 2);
 
     // Complete ReduceType::Expedited, so we should have mr-100-0 and mr-100-1 of TaskType::Reduce
     // added to taskman
-    taskman.task_completed(String::from("d"), ReduceType::Expedited, 2, 2, Some(100)).unwrap();
+    taskman.task_completed(String::from("d"), ReduceType::Expedited, 2, 2, 100).unwrap();
     assert_eq!(taskman.get_size(None), 5);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 1);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 4);
@@ -92,22 +91,22 @@ fn test_taskman_single_threaded() {
     assert_eq!(taskman.get_task(String::from("mr-100-1")).unwrap().get_worker_id().unwrap(), 100);
 
     // Get rid of the pre-existing reduce tasks
-    taskman.task_completed(String::from("i"), ReduceType::Traditional, 2, 2, None).unwrap();
-    taskman.task_completed(String::from("j"), ReduceType::Traditional, 2, 2, None).unwrap();
+    taskman.task_completed(String::from("i"), ReduceType::Traditional, 2, 2, 0).unwrap();
+    taskman.task_completed(String::from("j"), ReduceType::Traditional, 2, 2, 0).unwrap();
     assert_eq!(taskman.get_size(None), 3);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 1);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 2);
 
     // Get rid of the added reduce tasks when we completed ReduceType::Expedited
-    taskman.task_completed(String::from("mr-100-0"), ReduceType::Traditional, 2, 2, None).unwrap();
-    taskman.task_completed(String::from("mr-100-1"), ReduceType::Traditional, 2, 2, None).unwrap();
+    taskman.task_completed(String::from("mr-100-0"), ReduceType::Traditional, 2, 2, 0).unwrap();
+    taskman.task_completed(String::from("mr-100-1"), ReduceType::Traditional, 2, 2, 0).unwrap();
     assert_eq!(taskman.get_size(None), 1);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 1);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
 
     // Finally, double-check traditional. There should be nreduce new reduce tasks since there are
     // no map tasks remaining
-    taskman.task_completed(String::from("h"), ReduceType::Traditional, 2, 5, None).unwrap();
+    taskman.task_completed(String::from("h"), ReduceType::Traditional, 2, 5, 0).unwrap();
     assert_eq!(taskman.get_size(None), 2);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 0);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 2);
@@ -121,8 +120,8 @@ fn test_taskman_single_threaded() {
     assert_eq!(taskman.get_task(String::from("mr-4-0")).unwrap().get_path().len(), 5);
 
     // Complete the remaining reduce tasks
-    taskman.task_completed(String::from("mr-0-0"), ReduceType::Traditional, 2, 5, None).unwrap();
-    taskman.task_completed(String::from("mr-0-1"), ReduceType::Traditional, 2, 5, None).unwrap();
+    taskman.task_completed(String::from("mr-0-0"), ReduceType::Traditional, 2, 5, 0).unwrap();
+    taskman.task_completed(String::from("mr-0-1"), ReduceType::Traditional, 2, 5, 0).unwrap();
     assert_eq!(taskman.get_size(None), 0);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 0);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
@@ -140,7 +139,7 @@ fn test_taskman_single_threaded() {
 fn test_taskman_multi_threaded() { 
     let mut taskman = taskman::TaskManager::new();
     // Add several tasks
-    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
+    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), TaskType::Map, TaskID::MapID(i))));
     assert_eq!(taskman.get_size(None), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
@@ -160,7 +159,7 @@ fn test_taskman_multi_threaded() {
                 assert_eq!(task_type, TaskType::Map);
                 let path = paths[0].clone();
                 assert!(path.parse::<usize>().expect("Failed to parse path") <= n as usize);
-                thread_taskman.task_completed(path, ReduceType::Traditional, 2, 2, None).unwrap();
+                thread_taskman.task_completed(path, ReduceType::Traditional, 2, 2, 0).unwrap();
 
             });
         handles.push(handle);
@@ -189,7 +188,7 @@ fn test_taskman_multi_threaded() {
                 assert_eq!(task_type, TaskType::Map);
                 let path = paths[0].clone();
                 assert!(path.parse::<usize>().expect("Failed to parse path") <= 100 as usize && path.parse::<usize>().expect("Failed to parse path") >= n as usize);
-                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, 0).unwrap();
 
             });
         handles.push(handle);
@@ -217,7 +216,7 @@ fn test_taskman_multi_threaded() {
                 let (paths, task_type) = (*thread_taskman).get_idle_task(k, None).unwrap();
                 assert_eq!(task_type, TaskType::Reduce);
                 let path = paths[0].clone();
-                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, 0).unwrap();
 
             });
         handles.push(handle);
@@ -232,7 +231,7 @@ fn test_taskman_multi_threaded() {
 async fn async_taskman_multithread_completion() { 
     let mut taskman = taskman::TaskManager::new();
     // Add several tasks
-    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
+    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), TaskType::Map, TaskID::MapID(i))));
     assert_eq!(taskman.get_size(None), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
@@ -250,7 +249,7 @@ async fn async_taskman_multithread_completion() {
                 let (paths, _) = (*thread_taskman).get_idle_task(1, None).expect("No tasks remaining");
                 let path = paths[0].clone();
                 println!("Completed {}", path);
-                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, 0).unwrap();
             }});
         join.await.unwrap();
         {
@@ -268,7 +267,7 @@ async fn async_taskman_multithread_completion() {
 async fn async_taskman_multithread_delays_completion() { 
     let mut taskman = taskman::TaskManager::new();
     // Add several tasks
-    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), State::Idle, TaskType::Map)));
+    (0..100).for_each(|i| taskman.add_task(Task::new(vec!(i.to_string()), TaskType::Map, TaskID::MapID(i))));
     assert_eq!(taskman.get_size(None), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Map)), 100);
     assert_eq!(taskman.get_size(Some(TaskType::Reduce)), 0);
@@ -286,7 +285,7 @@ async fn async_taskman_multithread_delays_completion() {
                 let (paths, _) = (*thread_taskman).get_idle_task(1, None).expect("No tasks remaining");
                 let path = paths[0].clone();
                 println!("Started {}", path);
-                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, None).unwrap();
+                thread_taskman.task_completed(path, ReduceType::Traditional, 10, 2, 0).unwrap();
             }});
         join.await.unwrap();
         {

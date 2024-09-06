@@ -1,4 +1,7 @@
-use crate::ds::intermediate::Intermediate;
+use crate::ds::{
+    intermediate::Intermediate,
+    MapReduceStatus,
+};
 use crate::plugins::ExternalFunctions;
 use plugins_core::ds::KeyValue;
 use std::{
@@ -53,18 +56,20 @@ impl Worker {
         self.worker_id
     }
 
-    pub fn do_work(&self) {
+    pub fn do_work(&self) -> MapReduceStatus {
         // TODO: depending on ReduceType, eagerly get reduce tasks when available or wait for no map tasks 
         match self.reduce_type {
             ReduceType::Expedited => {
                 // Get whatever task is available.
                 let task = self.send_get_task(None);
+                MapReduceStatus::InProgress
             }
             ReduceType::Traditional => {
-                map_task = self.send_get_task(Some(TaskType::Map));
+                let map_task = self.send_get_task(Some(TaskType::Map));
 
                 let reduce_task = self.send_get_task(Some(TaskType::Reduce));
                 println!("traditional");
+                MapReduceStatus::InProgress
             }
         }
      
@@ -173,11 +178,11 @@ impl Worker {
 
     /// Define client-side RPC calls
     #[tokio::main]
-    pub async fn send_completed_task(&self, task: String, id: Option<i8>) -> Result<(), RpcError> {
+    pub async fn send_completed_task(&self, task: String, worker_id: i8) -> Result<(), RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
         transport.config_mut().max_frame_length(usize::MAX);
         let client: TaskServiceClient = TaskServiceClient::new(client::Config::default(), transport.await.unwrap()).spawn();
-        client.completed_task(context::current(), task, self.reduce_type.clone(), self.nreduce, self.nmap, id).await
+        client.completed_task(context::current(), task, self.reduce_type.clone(), self.nreduce, self.nmap, worker_id).await
     }
 
     #[tokio::main]
