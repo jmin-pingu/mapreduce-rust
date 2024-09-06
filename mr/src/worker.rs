@@ -177,7 +177,6 @@ impl Worker {
     }
 
     /// Define client-side RPC calls
-    #[tokio::main]
     pub async fn send_completed_task(&self, task: String, worker_id: i8) -> Result<(), RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
         transport.config_mut().max_frame_length(usize::MAX);
@@ -185,7 +184,6 @@ impl Worker {
         client.completed_task(context::current(), task, self.reduce_type.clone(), self.nreduce, self.nmap, worker_id).await
     }
 
-    #[tokio::main]
     pub async fn send_get_task(&self, task_type: Option<TaskType>) -> Result<Option<(Vec<String>, TaskType)>, RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
     
@@ -194,7 +192,6 @@ impl Worker {
         client.get_task(context::current(), self.worker_id, task_type).await
     }
 
-    #[tokio::main]
     pub async fn send_echo(&self, arg: String) -> Result<String, RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
     
