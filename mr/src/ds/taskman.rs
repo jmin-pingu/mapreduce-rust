@@ -78,7 +78,7 @@ impl TaskManager {
 
     /// Get the first available Idle task to give to a worker
     // NOTE: Think of a better name for this. 
-    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)> {
+    pub fn get_idle_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType, Option<i8>)> {
         let taskman_ref: Arc<Mutex<Vec<TimedTask>>> = Arc::clone(&self.list);
         let mut taskman: MutexGuard<'_, Vec<TimedTask>> = taskman_ref.lock().unwrap();
         // TODO: double-check the logic
@@ -87,7 +87,7 @@ impl TaskManager {
                 timed_task.task.set_worker_id(id);
                 timed_task.task.set_state(State::InProgress);
                 timed_task.reset_timer();
-                return Some((timed_task.task.get_path(), timed_task.task.get_task_type()))
+                return Some((timed_task.task.get_path(), timed_task.task.get_task_type(), timed_task.task.get_task_id()))
             }         
         }
         None
