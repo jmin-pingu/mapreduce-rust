@@ -37,18 +37,20 @@ pub struct Worker {
     reduce_type: ReduceType,
     nreduce: usize,
     nmap: usize,
-    server_addr: SocketAddr
+    server_addr: SocketAddr,
+    functions: ExternalFunctions
     // NOTE: do I want to add additional metadata?
 }
 
 impl Worker {
-    pub fn new(worker_id: i8, reduce_type: ReduceType, nreduce: usize, nmap: usize, server_addr: SocketAddr) -> Self {
+    pub fn new(worker_id: i8, reduce_type: ReduceType, nreduce: usize, nmap: usize, server_addr: SocketAddr, functions: ExternalFunctions) -> Self {
         Worker {
             worker_id, 
             reduce_type,
             nreduce, 
             nmap,
-            server_addr
+            server_addr,
+            functions
         }
     }
 
@@ -56,32 +58,74 @@ impl Worker {
         self.worker_id
     }
 
-    pub fn do_work(&self) -> MapReduceStatus {
+    pub async fn do_work(&self) -> MapReduceStatus {
         // TODO: depending on ReduceType, eagerly get reduce tasks when available or wait for no map tasks 
         match self.reduce_type {
             ReduceType::Expedited => {
                 // Get whatever task is available.
-                let task = self.send_get_task(None);
-                MapReduceStatus::InProgress
+                let task = self.send_get_task(None).await.unwrap();
+                match task {
+                    None => { MapReduceStatus::Completed }
+                    Some((paths, task_type, task_id)) => {
+                        match task_type {
+                            // TODO: double-check logic
+                            TaskType::Map => { 
+                                for filename in paths {
+                                    let kva = self.do_map(filename);
+                                    self.prepare_for_reduce(task_id.unwrap() as usize, kva);
+                                }
+                            }
+                            TaskType::Reduce => { 
+                                for filename in paths {
+                                    self.do_reduce(filename);
+                                }
+                            } 
+                        }
+                        MapReduceStatus::InProgress
+                    }
+                }
             }
+            //  fn do_map(filename: String, functions: &ExternalFunctions) -> Vec<KeyValue>
+            //  fn do_reduce(filename: String, functions: &ExternalFunctions)
+            //  fn prepare_for_reduce(map_task_num: usize, kva: Vec<KeyValue>)
             ReduceType::Traditional => {
-                let map_task = self.send_get_task(Some(TaskType::Map));
-
-                let reduce_task = self.send_get_task(Some(TaskType::Reduce));
-                println!("traditional");
-                MapReduceStatus::InProgress
+                let map_task = self.send_get_task(Some(TaskType::Map)).await.unwrap();
+                // Get whatever task is available.
+                match map_task {
+                    Some((paths, _, task_id)) => {
+                        for filename in paths {
+                            let kva = self.do_map(filename);
+                            self.prepare_for_reduce(task_id.unwrap() as usize, kva);
+                        }
+                        MapReduceStatus::InProgress
+                    }
+                    None => {
+                        let reduce_task = self.send_get_task(Some(TaskType::Reduce)).await.unwrap();
+                        match reduce_task {
+                            Some((paths, _, _)) => {
+                                for filename in paths {
+                                    self.do_reduce(filename);
+                                }
+                                MapReduceStatus::InProgress
+                            }
+                            None => {
+                                MapReduceStatus::Completed
+                            }
+                        }
+                    }
+                }
             }
         }
-     
     }
+     
 
 
     /// Description
     ///
     /// Arguments
-    pub fn do_map(&self, filename: String, functions: &ExternalFunctions) -> Vec<KeyValue> {
+    fn do_map(&self, filename: String) -> Vec<KeyValue> {
         let (filename, contents) = self.read_file(filename);
-        functions
+        self.functions
             .call_mapf(filename, contents)
             .expect("Invocation failed")
     }
@@ -92,7 +136,7 @@ impl Worker {
     ///
     // TODO: come up with a better name for preparing the output KeyValue's of mapf for nreduce reducef
     // tasks
-    pub fn prepare_for_reduce(&self, map_task_num: usize, kva: Vec<KeyValue>) {
+    fn prepare_for_reduce(&self, map_task_num: usize, kva: Vec<KeyValue>) {
         // Initialize the vector of nreduce temporary files
         let mut files: Vec<fs::File> = Vec::with_capacity(self.nreduce);
         for reduce_task_num in 0..self.nreduce {
@@ -109,7 +153,7 @@ impl Worker {
         });
     }
 
-    pub fn do_reduce(&self, filename: String, functions: &ExternalFunctions) {
+    pub fn do_reduce(&self, filename: String) {
         let mut intermediate: Intermediate = Intermediate::new();
     
         // Get the reduce task number from the filename, DO NOT move the filename since we still need
@@ -144,7 +188,7 @@ impl Worker {
                 outputf.write(
                     format!("{} {}\n", 
                         k.clone(), 
-                        functions
+                        self.functions
                             .call_reducef(k, v)
                             .expect("Invocation failed")
                         ).as_bytes()
@@ -184,7 +228,7 @@ impl Worker {
         client.completed_task(context::current(), task, self.reduce_type.clone(), self.nreduce, self.nmap, worker_id).await
     }
 
-    pub async fn send_get_task(&self, task_type: Option<TaskType>) -> Result<Option<(Vec<String>, TaskType)>, RpcError> {
+    pub async fn send_get_task(&self, task_type: Option<TaskType>) -> Result<Option<(Vec<String>, TaskType, Option<i8>)>, RpcError> {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
     
         transport.config_mut().max_frame_length(usize::MAX);
