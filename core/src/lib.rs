@@ -8,11 +8,11 @@ pub mod ds;
 pub static CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
-pub trait MapFunction {
+pub trait MapFunction: Send + Sync {
     fn mapf(&self, filename: String, contents: String) -> Vec<KeyValue>;
 }
 
-pub trait ReduceFunction {
+pub trait ReduceFunction: Send + Sync {
     fn reducef(&self, key: String, values: Vec<String>) -> String;
 }
 

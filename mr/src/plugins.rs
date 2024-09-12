@@ -1,7 +1,7 @@
 use plugins_core::ds::KeyValue;
 use std::{
     alloc::System, collections::HashMap, ffi::OsStr, io,
-    rc::Rc,
+    sync::Arc,
 };
 
 use libloading::Library;
@@ -17,12 +17,12 @@ static ALLOCATOR: System = System;
 // Set-up dynamic loading
 pub struct MapProxy {
     function: Box<dyn MapFunction>,
-    _lib: Rc<Library>
+    _lib: Arc<Library>
 }
 
 pub struct ReduceProxy {
     function: Box<dyn ReduceFunction>,
-    _lib: Rc<Library>
+    _lib: Arc<Library>
 }
 
 impl MapFunction for MapProxy {
@@ -45,8 +45,10 @@ enum FunctionProxy {
 #[derive(Default)]
 pub struct ExternalFunctions {
     functions: HashMap<String, FunctionProxy>,
-    libraries: Vec<Rc<Library>>,
+    libraries: Vec<Arc<Library>>,
 }
+
+unsafe impl Send for ExternalFunctions { } 
 
 impl ExternalFunctions {
     pub fn new() -> ExternalFunctions {
@@ -55,7 +57,7 @@ impl ExternalFunctions {
 
     /// TODO: specifically, double-check this segment
     pub unsafe fn load<P: AsRef<OsStr>>(&mut self, library_path: P) -> io::Result<()> {
-        let library = Rc::new(Library::new(library_path).unwrap());
+        let library = Arc::new(Library::new(library_path).unwrap());
 
         // get a pointer to the plugin_declaration symbol.
         let decl = library
@@ -73,7 +75,7 @@ impl ExternalFunctions {
             ));
         }
 
-        let mut registrar = PluginRegistrar::new(Rc::clone(&library));
+        let mut registrar = PluginRegistrar::new(Arc::clone(&library));
 
         (decl.register)(&mut registrar);
 
@@ -111,11 +113,11 @@ impl ExternalFunctions {
 
 struct PluginRegistrar {
     functions: HashMap<String, FunctionProxy>,
-    lib: Rc<Library>,
+    lib: Arc<Library>,
 }
 
 impl PluginRegistrar {
-    fn new(lib: Rc<Library>) -> PluginRegistrar {
+    fn new(lib: Arc<Library>) -> PluginRegistrar {
         PluginRegistrar {
             lib,
             functions: HashMap::default(),
@@ -127,7 +129,7 @@ impl plugins_core::PluginRegistrar for PluginRegistrar {
     fn register_map(&mut self, function: Box<dyn MapFunction>) {
         let proxy = MapProxy {
             function,
-            _lib: Rc::clone(&self.lib),
+            _lib: Arc::clone(&self.lib),
         };
         self.functions.insert("mapf".to_string(), FunctionProxy::Map(proxy));
     }
@@ -136,7 +138,7 @@ impl plugins_core::PluginRegistrar for PluginRegistrar {
     fn register_reduce(&mut self, function: Box<dyn ReduceFunction>) { 
         let proxy = ReduceProxy {
             function,
-            _lib: Rc::clone(&self.lib),
+            _lib: Arc::clone(&self.lib),
         };
         self.functions.insert("reducef".to_string(), FunctionProxy::Reduce(proxy));
     }
