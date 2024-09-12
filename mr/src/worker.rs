@@ -58,21 +58,27 @@ impl Worker {
         self.worker_id
     }
 
-    pub async fn do_work(&self) -> MapReduceStatus {
+    pub async fn do_work(&self) -> Result<MapReduceStatus, RpcError> {
         // TODO: depending on ReduceType, eagerly get reduce tasks when available or wait for no map tasks 
         match self.reduce_type {
             ReduceType::Expedited => {
                 // Get whatever task is available.
-                let task = self.send_get_task(None).await.unwrap();
+                println!("Reduce Type Expedited");
+                let task = self.send_get_task(None).await;
                 match task {
-                    None => { MapReduceStatus::Completed }
-                    Some((paths, task_type, task_id)) => {
+                    Ok(None) => { Ok(MapReduceStatus::Completed) }
+                    Ok(Some((paths, task_type, task_id))) => {
                         match task_type {
                             // TODO: double-check logic
                             TaskType::Map => { 
+                                let echo = self.send_echo(String::from("Hello World")).await;
+                                println!("{:#?}", echo);
                                 for filename in paths {
-                                    let kva = self.do_map(filename);
+                                    let kva = self.do_map(filename.clone());
                                     self.prepare_for_reduce(task_id.unwrap() as usize, kva);
+
+                                    let echo = self.send_echo(String::from("Hello World")).await;
+                                    println!("{:#?}", echo);
                                 }
                             }
                             TaskType::Reduce => { 
@@ -81,7 +87,7 @@ impl Worker {
                                 }
                             } 
                         }
-                        MapReduceStatus::InProgress
+                        Ok(MapReduceStatus::InProgress)
                     }
                 }
             }
@@ -89,6 +95,7 @@ impl Worker {
             //  fn do_reduce(filename: String, functions: &ExternalFunctions)
             //  fn prepare_for_reduce(map_task_num: usize, kva: Vec<KeyValue>)
             ReduceType::Traditional => {
+                println!("Reduce Type Traditional");
                 let map_task = self.send_get_task(Some(TaskType::Map)).await.unwrap();
                 // Get whatever task is available.
                 match map_task {
@@ -124,6 +131,7 @@ impl Worker {
     ///
     /// Arguments
     fn do_map(&self, filename: String) -> Vec<KeyValue> {
+        println!("Doing map for filename {}", filename);
         let (filename, contents) = self.read_file(filename);
         self.functions
             .call_mapf(filename, contents)
@@ -140,7 +148,7 @@ impl Worker {
         // Initialize the vector of nreduce temporary files
         let mut files: Vec<fs::File> = Vec::with_capacity(self.nreduce);
         for reduce_task_num in 0..self.nreduce {
-            let file = fs::File::create(format!("{:#?}/mr-{}-{}", std::env::current_dir().unwrap().into_os_string().into_string(), map_task_num, reduce_task_num)).unwrap();
+            let file = fs::File::create(format!("{}/mr-{}-{}", std::env::current_dir().unwrap().into_os_string().into_string().unwrap(), map_task_num, reduce_task_num)).unwrap();
             files.push(file);
         }
     
@@ -209,7 +217,7 @@ impl Worker {
 
     /// read_file: 
     fn read_file(&self, file_name: String) -> (String, String) {
-        let contents = fs::read_to_string(file_name.clone()).expect("Should have been able to read file");
+        let contents = fs::read_to_string(file_name.clone()).expect(format!("Should have been able to read file {:#?}", file_name.clone()).as_str());
         (file_name, contents)
     }
 
@@ -225,6 +233,7 @@ impl Worker {
         let mut transport = tarpc::serde_transport::tcp::connect(self.server_addr, Json::default);
         transport.config_mut().max_frame_length(usize::MAX);
         let client: TaskServiceClient = TaskServiceClient::new(client::Config::default(), transport.await.unwrap()).spawn();
+        println!("Sending completed_task RPC");
         client.completed_task(context::current(), task, self.reduce_type.clone(), self.nreduce, self.nmap, worker_id).await
     }
 

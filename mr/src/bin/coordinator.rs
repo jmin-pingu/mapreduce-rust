@@ -56,12 +56,14 @@ impl Coordinator {
     }
 
     // Coordinator methods...
-    pub async fn get_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)> {
+    pub async fn get_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType, Option<i8>)> {
         let task_todo = self.taskman.get_idle_task(id, task_type);
+        println!("Retrieved task: {:#?}", task_todo);
         task_todo 
     }
 
     async fn completed_task(&mut self, task: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, worker_id: i8){ 
+        println!("Retrieved completed_task RPC for task {}", task);
         self.taskman.task_completed(task, reduce_type, nreduce, nmap, worker_id).unwrap()
     }    
 
@@ -82,7 +84,7 @@ struct Flags {
 // NOTE: enumerate all the input files myself (i.e. give them unique monotonically increasing IDs)
 
 impl mr::rpc::TaskService for Server {
-    async fn get_task(self, _: context::Context, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType)> {
+    async fn get_task(self, _: context::Context, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType, Option<i8>)> {
         let coordref = Arc::clone(&self.coordref);
         let mut safe_taskman = coordref.lock().await;
         safe_taskman.get_task(id, task_type).await
@@ -133,16 +135,16 @@ pub async fn main() -> anyhow::Result<()> {
     let paths = fs::read_dir(flags.inputdir).unwrap();
     paths.enumerate().for_each(|(i, path)| {
         let task = Task::new(
-            vec!(format!("Name: {}", path.unwrap().path().display())),
+            vec!(format!("{}", path.unwrap().path().display())),
             TaskType::Map,
             TaskID::MapID(i as i8),
         );
         (&mut taskman).add_task(task);
     });
 
+    println!("{:#?}", taskman);
     let coordinator = Coordinator::new(taskman);
     let coordref = Arc::new(Mutex::new(coordinator));
-
 
     // Background routine
     let join = task_checker(&coordref);

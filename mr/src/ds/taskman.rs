@@ -135,6 +135,7 @@ impl TaskManager {
     }
 
     pub fn task_completed(&mut self, path: String, reduce_type: ReduceType, nreduce: usize, nmap: usize, worker_id: i8) -> Result<(), TaskManagerError> {
+        println!("Completed task {}", path);
         match self.update_state(path.clone(), State::Completed) {
             Some(TaskType::Map) => {
                 let map_task_id = self.get_task_id(path.clone()).unwrap();
