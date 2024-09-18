@@ -2,6 +2,7 @@ use mr::{
     worker::{ReduceType, Worker},
     ds::MapReduceStatus
 };
+use futures::executor::block_on;
 use std::{
     net::SocketAddr,
     thread,
@@ -51,15 +52,12 @@ async fn work_until_completion(worker: Worker, id: i8) {
     let join = task::spawn( async move { 
         loop {
             // TODO: need a condition to exit
-            println!("Retry connection");
-
             match worker.do_work().await {
                MapReduceStatus::Completed => {
                    println!("Worker {} Completed", id);
                    break
                }
                _ => {
-                   // let response = worker.send_echo(String::from("hello world")).await;
                    println!("Worker {} In Progress", id);
                }
             }

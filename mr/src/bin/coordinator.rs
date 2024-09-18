@@ -4,6 +4,7 @@ use tarpc::{
     server::{self, incoming::Incoming, Channel},
     tokio_serde::formats::Json,
 };
+use std::time::Instant;
 use mr::worker::ReduceType;
 use tokio::{
     task,
@@ -57,7 +58,9 @@ impl Coordinator {
 
     // Coordinator methods...
     pub async fn get_task(&mut self, id: i8, task_type: Option<TaskType>) -> Option<(Vec<String>, TaskType, Option<i8>)> {
+        let now = Instant::now();
         let task_todo = self.taskman.get_idle_task(id, task_type);
+        println!("coordinator, Task received, took {:#?}", Instant::now() - now);
         println!("Retrieved task: {:#?}", task_todo);
         task_todo 
     }
@@ -107,6 +110,7 @@ async fn spawn(fut: impl Future<Output = ()> + Send + 'static) {
     tokio::spawn(fut);
 }
 
+// NOTE: This was the problem
 async fn task_checker(coordref: &Arc<Mutex<Coordinator>>) -> tokio::task::JoinHandle<()> {
     let coordref = Arc::clone(coordref);
     let join = task::spawn( async move { 
@@ -119,7 +123,7 @@ async fn task_checker(coordref: &Arc<Mutex<Coordinator>>) -> tokio::task::JoinHa
                 println!("Checking Progress");
                 safe_taskman.check_progress(TIMEOUT);
             }
-            thread::sleep(DELAY);
+            tokio::time::sleep(DELAY).await;
         }
     });
     join
@@ -147,9 +151,10 @@ pub async fn main() -> anyhow::Result<()> {
     let coordref = Arc::new(Mutex::new(coordinator));
 
     // Background routine
-    let join = task_checker(&coordref);
-    println!("Starting server");
-    join.await;
+    // let join = task_checker(&coordref);
+    // println!("Starting server");
+    // join.await;
+
     let mut listener = tarpc::serde_transport::tcp::listen(&server_addr, Json::default).await?;
     tracing::info!("Listening on port {}", listener.local_addr().port());
     listener.config_mut().max_frame_length(usize::MAX);

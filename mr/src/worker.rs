@@ -11,7 +11,9 @@ use std::{
     io::prelude::*, 
     path, 
     io,
+    time::Instant,
 };
+use futures::executor::block_on;
 
 use crate::{
     ds::task::TaskType, 
@@ -58,27 +60,31 @@ impl Worker {
         self.worker_id
     }
 
-    pub async fn do_work(&self) -> Result<MapReduceStatus, RpcError> {
+    pub async fn do_work(&self) -> MapReduceStatus {
         // TODO: depending on ReduceType, eagerly get reduce tasks when available or wait for no map tasks 
         match self.reduce_type {
             ReduceType::Expedited => {
                 // Get whatever task is available.
                 println!("Reduce Type Expedited");
-                let task = self.send_get_task(None).await;
+                let now = Instant::now();
+                let task = self.send_get_task(None).await.unwrap();
+                println!("Task received, took {:#?}", Instant::now() - now);
                 match task {
-                    Ok(None) => { Ok(MapReduceStatus::Completed) }
-                    Ok(Some((paths, task_type, task_id))) => {
+                    None => { MapReduceStatus::Completed }
+                    Some((paths, task_type, task_id)) => {
                         match task_type {
                             // TODO: double-check logic
                             TaskType::Map => { 
-                                let echo = self.send_echo(String::from("Hello World")).await;
-                                println!("{:#?}", echo);
+                                while let Ok(val) = self.send_echo(String::from("Hello World")).await {
+                                    println!("{:#?}", val);
+                                }
                                 for filename in paths {
                                     let kva = self.do_map(filename.clone());
                                     self.prepare_for_reduce(task_id.unwrap() as usize, kva);
 
-                                    let echo = self.send_echo(String::from("Hello World")).await;
-                                    println!("{:#?}", echo);
+                                    while let Ok(val) = self.send_echo(String::from("Hello World")).await {
+                                        println!("{:#?}", val);
+                                    }
                                 }
                             }
                             TaskType::Reduce => { 
@@ -87,7 +93,7 @@ impl Worker {
                                 }
                             } 
                         }
-                        Ok(MapReduceStatus::InProgress)
+                        MapReduceStatus::InProgress
                     }
                 }
             }
@@ -242,7 +248,11 @@ impl Worker {
     
         transport.config_mut().max_frame_length(usize::MAX);
         let client: TaskServiceClient = TaskServiceClient::new(client::Config::default(), transport.await.unwrap()).spawn();
-        client.get_task(context::current(), self.worker_id, task_type).await
+
+        let now = Instant::now();
+        let val = client.get_task(context::current(), self.worker_id, task_type).await;
+        println!("RPC, Task received, took {:#?}", Instant::now() - now);
+        val 
     }
 
     pub async fn send_echo(&self, arg: String) -> Result<String, RpcError> {
